@@ -252,6 +252,64 @@ Load pre-generated model plots:
 
 ---
 
+### 6.2.1 Walk-Forward Cross-Validation (TimeSeriesSplit)
+
+A common question in model evaluation is: **"How stable are these results across different data splits?"** — this is typically answered with Cross-Validation (CV).
+
+However, our data is **chronologically ordered**. Using standard K-Fold CV would shuffle the rows, causing the model to train on 2017 data and predict 2012 data — a clear **temporal leakage** that violates our Out-of-Time (OOT) methodology.
+
+**Solution:** We use `TimeSeriesSplit` (Walk-Forward Validation), which respects the timeline:
+*   Fold 1: Train on months 1-20%, validate on 20-40%
+*   Fold 2: Train on months 1-40%, validate on 40-60%
+*   ...and so on.
+
+> **Important Trade-off:** In early folds, the training set is very small, which hurts performance. This is expected behavior — it actually validates that our original 80/20 OOT split (which maximizes training data) is the superior approach for production deployment. The TimeSeriesSplit here serves purely to demonstrate **model stability** over time.
+
+---
+
+**Cross-Validation Findings:**
+
+*   **The model is stable across time.** Despite the expected performance drop in early folds (due to limited training data), the LightGBM model consistently achieves reasonable AUC scores.
+*   **The OOT Test score is consistent with the CV mean**, confirming that our single 80/20 temporal split did not produce a lucky result.
+*   **Why not standard K-Fold?** Because shuffling rows would let the model learn from future borrowers to predict past ones — a severe form of data leakage in time-series data. `TimeSeriesSplit` preserves chronological integrity.
+*   **Trade-off acknowledged:** Walk-Forward CV penalizes early folds with very little training data. Our original OOT split remains the preferred evaluation strategy for production deployment, as it maximizes training data utility. This CV analysis simply serves as an additional stability check.
+
+---
+
+### 6.2.2 Deep Learning Baseline (MLP Neural Network)
+
+To satisfy the full modeling toolkit and provide a rigorous comparison, we train a **Multi-Layer Perceptron (MLP)** — a standard feed-forward neural network — on the same features.
+
+**Hypothesis:** We expect the MLP to **underperform** LightGBM on this tabular dataset. This is a well-documented phenomenon in the ML literature (see discussion below), but it's important to demonstrate it empirically rather than simply claim it.
+
+---
+
+### Why Tree-Based Models Outperform Deep Learning on Tabular Data
+
+The MLP's underperformance is **not a bug — it's a feature of the problem domain.** This is a well-documented phenomenon, rigorously studied in recent research:
+
+> **Grinsztajn, L., Oyallon, E., & Varoquaux, G. (2022).** *"Why do tree-based models still outperform deep learning on typical tabular data?"* NeurIPS 2022.
+
+The key reasons are:
+
+| Factor | Tree-Based Models (LightGBM) | Neural Networks (MLP) |
+|---|---|---|
+| **Inductive Bias** | Naturally handle heterogeneous features (mix of categorical, ordinal, continuous) | Assume smooth, continuous input space — struggle with mixed types |
+| **Feature Interactions** | Discover sharp, axis-aligned decision boundaries that match tabular data | Learn smooth decision boundaries — poor fit for "if DTI > 30 AND FICO < 650" type rules |
+| **Robustness to Noise** | Uninformative features are simply never selected for splits | Noisy features can corrupt gradient updates and hurt all neurons |
+| **Data Efficiency** | Strong with ~100K-1M samples (our range) | Typically need millions of samples to outperform trees |
+| **Hyperparameter Sensitivity** | Relatively robust with default settings | Architecture, learning rate, dropout, batch size, etc. all interact non-trivially |
+
+**Our Critical Assessment:**
+Despite the current hype around deep learning, we intentionally chose LightGBM as our primary model because:
+1. Our data is **tabular** (not images, text, or sequences where DL excels).
+2. Our dataset size (~800K training samples) is in the "sweet spot" for gradient-boosted trees.
+3. **Interpretability matters** in credit risk — SHAP values for tree models are theoretically grounded (Lundberg & Lee, 2017), while SHAP approximations for neural networks are less reliable.
+
+This MLP experiment validates our architectural choice: **using the right tool for the job is more important than using the most complex tool available.**
+
+---
+
 ### 6.3 Model Ensembling (Soft Voting)
 Instead of relying solely on LightGBM, what if we combine its non-linear predictions with Logistic Regression's linear baseline? We create a **Soft Voting Ensemble** to average their predicted probabilities, aiming for a more robust generalized model.
 
@@ -343,4 +401,8 @@ In this project, we conducted a comprehensive credit risk analysis using the Len
 
 **Final Thoughts:**
 This pipeline successfully transforms raw, imbalanced financial data into actionable, interpretable business intelligence, ready for deployment in a modern credit risk department.
+
+
+
+---
 
