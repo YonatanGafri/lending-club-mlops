@@ -1,0 +1,346 @@
+# Lending Club Data Science Project
+
+## Abstract
+This project conducts a comprehensive credit risk analysis using the Lending Club dataset. The primary objective is to identify key borrower attributes and financial indicators that strongly correlate with loan defaults. By leveraging advanced data preprocessing and machine learning techniques, we aim to build robust predictive models capable of estimating the probability of default for new loan applications.
+
+## Problem & Motivation
+Peer-to-peer (P2P) lending platforms, such as Lending Club, revolutionized personal finance by connecting individual investors directly with borrowers. However, this model shifts the credit risk entirely onto the investors. Accurately predicting loan defaults is critical because:
+1. **Capital Preservation:** Investors stand to lose their principal if a borrower defaults.
+2. **Platform Trust:** The long-term viability of P2P lending depends on delivering consistent returns to investors. High default rates can erode trust and liquidity.
+3. **Optimized Lending:** Better risk models allow for more accurate interest rate assignments, ensuring fair pricing for borrowers and adequate compensation for investor risk.
+
+This project is motivated by the need to develop a reliable, data-driven approach to risk assessment that minimizes financial exposure while maximizing investment returns.
+
+## Data Collection
+The dataset used in this project is sourced from Kaggle: <a href="https://www.kaggle.com/datasets/wordsforthewise/lending-club" style="color:blue;">Lending Club Dataset</a>. It contains comprehensive historical data on loans issued from 2007 to 2018, including various applicant attributes, loan characteristics, and the final loan status.
+
+---
+
+## 1. Environment Setup & Data Loading
+
+---
+
+### Discussion: To Use or Not to Use Lending Club's Grade?
+
+Right after loading the dataset, we notice columns like `grade` and `sub_grade`. These are risk assessments calculated and assigned to borrowers by Lending Club themselves.
+This raises a fundamental question: **Should we even use their grade as a feature in our model? Isn't it essentially "cheating" or copying someone else's homework?**
+
+This is a classic dilemma in Data Science, and there are two valid approaches:
+
+1. **The Purist Approach (Excluding the Grade):**
+If we drop their grade, our model will have to learn from scratch based purely on the raw features (salary, employment length, loan amount, etc.). The advantage? It proves the true predictive power of our algorithm.
+
+2. **The Ensemble Approach (Including the Grade):**
+Lending Club's grade encapsulates a massive amount of financial expertise and potentially even proprietary data (like hard credit pulls) that we don't have in this public dataset. Using their grade as an input feature is akin to taking an expert's baseline opinion, and then using our advanced model to find out *where the expert made a mistake*.
+
+**Our Decision:** After our WOE/IV analysis, `sub_grade` has IV=0.51 (the highest predictor!) and it is **NOT leakage** — it is assigned pre-origination. We keep it as a feature and encode it ordinally (A1=1, G5=35).
+
+---
+
+## 2. Data Quality & Cleaning Pipeline
+
+### 2.1 Leakage Audit (Round 1 + Round 2)
+
+We perform a comprehensive two-round leakage audit:
+- **Round 1**: Remove post-origination columns (payments, settlements, hardship)
+- **Round 2**: Remove additional leakage discovered through research
+  - `funded_amnt`, `funded_amnt_inv` (determined after application)
+  - `num_tl_30dpd`, `num_tl_120dpd_2m` (updated post-origination)
+  - `chargeoff_within_12_mths` (near-direct proxy for target)
+  - All `sec_app_*` columns (100% null in training set)
+  - All `hardship_*` columns (post-origination)
+  - Constants (`policy_code`, `pymnt_plan`), free-text (`title`, `emp_title`)
+  - High-missing >75% (`open_acc_6m`, `il_util`, etc.)
+
+---
+
+## 3. Target Variable Definition & OOT Split
+
+We filter to terminal loan statuses and create the binary target:
+- **Fully Paid** → 0 (Good loan)
+- **Charged Off** → 1 (Default)
+
+We use **Out-of-Time (OOT) validation** — train on older loans, test on newer ones.
+This is more realistic than random split because it simulates production deployment.
+
+---
+
+## 4. Exploratory Data Analysis (EDA)
+
+### 4.1 Target Distribution & Temporal Drift
+
+---
+
+### 4.1 Target Distribution & Temporal Drift
+
+
+---
+
+### 4.2 Structural Missingness Analysis
+
+
+---
+
+**Key Finding**: `emp_length` is **anomalous** — borrowers with missing employment length
+default at **25.7%** vs 19.1% for those with known values. This is a 6.6pp difference!
+All `mths_since_*` columns show the opposite: NULL means 'never had this event' = lower risk.
+
+---
+
+**Key Findings:**
+- **Class Imbalance**: 4.13:1 ratio (80.5% Fully Paid vs 19.5% Charged Off)
+- **Temporal Drift**: Default rate **doubled** from 12.6% (2009) to 23.1% (2016)
+- Baseline accuracy of 80.5% achieved by predicting all loans as 'Fully Paid'
+- This confirms **OOT split was the right choice** over random split
+
+---
+
+### 4.3 Business Questions & Hypotheses Testing
+
+**1. Term Length vs Default:** Does a longer term (60 months vs 36 months) mean lower payments -> fully paid, OR more exposure time -> more default?
+**2. Interest Rate:** Is high interest rate a cause of default or a symptom?
+**3. Loan Purpose:** Do luxury/vacation loans perform better than debt consolidation loans?
+**4. Home Ownership:** Do renters default more than homeowners?
+**5. Verification Status:** Does verifying income lead to better loan performance?
+**6. Loan Amount vs Installment:** Scatter plot to see the spread of interest rates.
+
+---
+
+### Answers to Business Questions:
+1. **Term Length:** 60-month loans have a significantly higher default rate. The longer exposure time (more chances for life events like job loss) outweighs the benefit of smaller monthly payments.
+2. **Interest Rate:** It is both a symptom and a cause. Lending Club assigns high interest to risky borrowers (symptom), but the high monthly burden also increases the likelihood of default (cause).
+3. **Purpose:** Debt Consolidation has higher default rates compared to 'Credit Card' refinancing or luxury purchases (vacation/car), indicating that borrowers already in debt struggle more.
+4. **Home Ownership:** Renters (RENT) default slightly more than homeowners (MORTGAGE/OWN). Renters generally have lower financial stability.
+5. **Verification Status:** Interestingly, 'Verified' loans often have *higher* default rates! This is because Lending Club only verifies income for the most risky/high-amount borrowers. This is a classic confounding variable.
+
+
+---
+
+### 4.4 Sub-Grade Monotonicity & Credit Risk EDA
+
+---
+
+### 4.5 Heavy Tails Analysis
+
+---
+
+### 4.6 Unsupervised Learning (Clustering & Dimensionality Reduction)
+
+As part of our Exploratory Data Analysis, we use unsupervised learning to discover hidden structures and natural groupings among borrowers without using the target label (`default`). 
+This helps us answer: Are there distinct 'Borrower Personas' in our data?
+
+We will apply **Principal Component Analysis (PCA)** for dimensionality reduction and **K-Means Clustering** to find these personas using key financial indicators.
+
+---
+
+#### 4.6.0 Optimal K Selection (Silhouette & Elbow Analysis)
+
+Before blindly choosing a number of clusters, we use two complementary approaches to determine the optimal **K**:
+1. **Elbow Method** — measures the total within-cluster sum of squares (inertia). We look for the "elbow" where adding more clusters stops significantly reducing inertia.
+2. **Silhouette Score** — measures how similar each point is to its own cluster vs. neighboring clusters. Ranges from -1 (wrong cluster) to +1 (perfect fit). Higher is better.
+
+This is critical for methodological rigor: **we never choose K arbitrarily**.
+
+---
+
+**Key Finding — Optimal K Selection:**
+*   The **Elbow Method** shows a clear inflection point at K=3, after which the marginal reduction in inertia diminishes significantly.
+*   The **Silhouette Analysis** confirms that K=3 achieves the best cohesion-to-separation ratio.
+*   This dual validation ensures our choice of 3 "Borrower Personas" is **data-driven, not arbitrary**.
+
+We now proceed to perform PCA dimensionality reduction and K-Means clustering with K=3.
+
+---
+
+**Cluster Analysis (Borrower Personas):**
+*   **Cluster 0 (Moderate/Stable):** Moderate income, lower loan amounts. 
+*   **Cluster 1 (Highly Leveraged/High Risk):** High `dti`, high `revol_util`, higher interest rates. Notice their default rate is typically the highest.
+*   **Cluster 2 (Wealthy High-Rollers):** High `annual_inc`, massive `loan_amnt`, but low DTI.
+
+This unsupervised exploration confirms that natural risk groups exist in the data even before applying complex supervised models!
+
+---
+
+### 4.6.1 PCA Factor Loadings
+To deeply understand our PCA clusters, we analyze the **Factor Loadings**. This shows us exactly which original features mathematically drive Principal Component 1 (PC1) and Principal Component 2 (PC2).
+
+
+
+---
+
+#### 4.6.2 PCA vs t-SNE: Global Structure vs Local Neighborhoods
+
+PCA is a **linear** method that preserves **global variance** — it finds the axes of maximum spread in the data. However, it may miss complex, non-linear relationships.
+
+**t-SNE** (t-distributed Stochastic Neighbor Embedding) is a **non-linear** method that excels at preserving **local structure** — it keeps nearby points close and pushes distant points apart. This makes it ideal for revealing clusters that PCA might flatten.
+
+Below, we compare both projections side-by-side, colored by our K-Means clusters and by actual default status, to understand what each method reveals about borrower structure.
+
+---
+
+**PCA vs t-SNE — Key Observations:**
+
+| Aspect | PCA | t-SNE |
+|---|---|---|
+| **Method Type** | Linear | Non-linear |
+| **Preserves** | Global variance (axes of maximum spread) | Local neighborhoods (nearby points stay near) |
+| **Cluster Separation** | Clusters overlap significantly due to linear projection | Clusters may appear more distinct due to non-linear warping |
+| **Interpretation** | Axes have clear meaning (Factor Loadings) | Axes have **no inherent meaning** (only relative distances matter) |
+| **Speed** | Very fast (eigenvalue decomposition) | Slow (iterative, O(n²) complexity) |
+
+**Key Insight:**
+*   **PCA** confirms the continuous nature of the credit risk spectrum — borrowers don't form perfectly separated groups; rather, they lie on a gradient from "financially stable" to "highly leveraged."
+*   **t-SNE** reveals local density patterns that PCA misses. Default cases (red) tend to cluster in specific neighborhoods, suggesting that default risk is not uniformly distributed across the feature space, but concentrated in certain "pockets" of borrower profiles.
+*   The fact that both methods show overlapping default/non-default populations validates a critical business insight: **many defaults are unpredictable from financial features alone** (life events, economic shocks).
+
+---
+
+**Factor Loadings Interpretation:**
+* **PC1:** Strongly driven by Income (`annual_inc`) and inversely by `dti` and `int_rate`. This axis represents **Financial Stability**.
+* **PC2:** Strongly driven by `loan_amnt`. This axis represents the **Scale of the Loan**.
+This mathematically validates our Persona clusters!
+
+
+---
+
+### 4.8 Anomaly Detection (Isolation Forest)
+Are there highly anomalous loan applications that behave differently? We use **Isolation Forest** (an unsupervised anomaly detection algorithm) to flag the top 1% most unusual borrowers and check if their default rate is significantly different.
+
+
+
+---
+
+**Anomaly Detection Insight:**
+Borrowers flagged as 'Anomalies' (-1) by the Isolation Forest have a notably different default rate compared to the standard population (1). This proves that unsupervised anomaly flagging adds a valuable signal for detecting edge-case credit risks!
+
+
+---
+
+### 4.7 Correlation Heatmap
+
+To complete our visual storytelling, we generate a correlation heatmap of the numerical features.
+
+---
+
+## 5. Feature Engineering
+
+### 5.1 Structural Missingness Flags
+Create binary indicators for NULL = 'never had event', then fill NULLs with 999.
+
+---
+
+### 5.2 Domain Features (Credit Risk Intuition)
+
+---
+
+### 5.3 Categorical Encoding & Final Cleanup
+
+---
+
+## 6. Modeling
+
+We run the full modeling pipeline from the saved feature-engineered parquet files.
+Results are pre-computed in `modeling.py` and saved to `model_results.json`.
+
+### 6.1 Load Results
+
+---
+
+### 6.2 Visualizations
+
+Load pre-generated model plots:
+
+---
+
+### 6.3 Model Ensembling (Soft Voting)
+Instead of relying solely on LightGBM, what if we combine its non-linear predictions with Logistic Regression's linear baseline? We create a **Soft Voting Ensemble** to average their predicted probabilities, aiming for a more robust generalized model.
+
+
+
+---
+
+### 6.4 Deep Error Analysis (False Negatives)
+A model's performance isn't just a metric; it's about understanding **where it fails**. We isolate the **False Negatives** (Borrowers our Ensemble model thought were perfectly safe, but actually defaulted). Are they clustered in specific states? Do they have a specific income bracket?
+
+
+
+---
+
+**Error Analysis Insight:**
+Looking at the False Negatives, we can see they often look 'good' on paper (e.g., decent FICO, lower interest rates), which is why the model missed them. This suggests their default was triggered by external sudden life events (job loss, medical emergency) rather than structural financial weakness at the time of application. This is a critical business context!
+
+
+---
+
+## 7. Conclusions & Key Findings
+
+### Model Performance
+| Model | ROC-AUC (OOT) | PR-AUC (OOT) | Brier Score |
+|---|:---:|:---:|:---:|
+| Logistic Regression (Baseline) | 0.698 | 0.378 | 0.210 |
+| **LightGBM + Optuna** | **0.714** | **0.397** | **0.211** |
+
+### Key Insights
+
+1. **Leakage Audit**: Removed 63 columns total across two rounds. Critical catches include
+   `funded_amnt` (post-origination) and `chargeoff_within_12_mths` (near-proxy for target).
+
+2. **Feature Engineering Matters**: Our domain feature `adjusted_dti` ranked **#3** in SHAP
+   importance — proving that thoughtful feature engineering adds real predictive value.
+
+3. **Threshold Optimization**: Moving from default 0.5 to optimal 0.59 threshold increased
+   Net Expected Profit by **$92M** (+18%) while maintaining 74.4% approval rate.
+
+4. **Calibration**: Isotonic Regression improved Brier Score by **21.1%**, making probability
+   estimates reliable for business decisions.
+
+5. **Stability**: Score distribution PSI = 0.001 confirms the model generalizes well from
+   the training period (2007-2016) to the test period (2017-2018).
+
+6. **Temporal Drift**: Default rates doubled from 12.6% to 23.1% over the training period,
+   validating our choice of OOT split over random split.
+
+### Top 5 Predictors (SHAP)
+| Rank | Feature | Mean |SHAP| | Interpretation |
+|:---:|---|:---:|---|
+| 1 | `sub_grade_num` | 0.362 | LC's internal rating (higher = riskier) |
+| 2 | `term_num` | 0.194 | 60-month loans default more |
+| 3 | `adjusted_dti` | 0.172 | **Our domain feature!** Higher DTI = riskier |
+| 4 | `avg_cur_bal` | 0.141 | Lower balances = less stability |
+| 5 | `fico_range_low` | 0.135 | Lower FICO = higher risk |
+
+---
+
+## 8. Reflective Thinking & Future Work
+
+As with any real-world Data Science project, it is crucial to reflect on the limitations of our approach and the data itself:
+
+### Data Limitations & Biases
+1. **Survival Bias (Reject Inference):** Our model is trained exclusively on *accepted* loans. We have a massive 1.7GB dataset of rejected loans that we did not use for training because we lack their true labels. This creates a survival bias, as our model only knows how to score 'good enough' applicants. In an advanced industry setting, we would apply **Reject Inference** (e.g., Fuzzy Augmentation) to estimate their performance and refine our thresholds.
+2. **Temporal Bias:** The macroeconomic environment shifts constantly. A model trained on 2012-2016 data might fail catastrophically during an economic recession. While we used Out-of-Time (OOT) validation to simulate this, real-world models require constant monitoring (e.g., Population Stability Index - PSI) to detect data drift.
+3. **Confounding Variables:** We discovered that 'Verified' income actually correlates with *higher* defaults. This is a classic confounding issue: Lending Club only demands income verification for the riskiest, highest-loan-amount borrowers.
+
+### What we would do differently given more time
+*   **Hyperparameter Tuning:** Dedicate more compute to Optuna for LightGBM tuning.
+*   **Ensembling:** Combine Logistic Regression (good for interpretability) and LightGBM (good for non-linear interactions) using stacking.
+*   **Explainability:** Deploy a Dash/Streamlit interactive app allowing underwriters to input a loan application and get a live SHAP waterfall plot.
+
+---
+
+## 9. Summary & Discussion
+
+In this project, we conducted a comprehensive credit risk analysis using the Lending Club dataset. We went far beyond standard accuracy metrics to build a robust, business-oriented Machine Learning pipeline.
+
+**Key Achievements & Methodological Highlights:**
+1. **Preventing Time-Travel (Leakage):** By utilizing an **Out-Of-Time (OOT)** split, we ensured our model was evaluated on strictly future loans (post-2015), mimicking real-world deployment.
+2. **Business Optimization over Pure Math:** Instead of relying on ROC-AUC alone, we built a **Cost-Benefit Matrix** that aligned the model's threshold with the actual financial reality of loan defaults versus safe returns, finding a threshold that maximizes profit.
+3. **Advanced Signal Extraction:** 
+   - We proved that **Structural Missingness** (e.g., missing employment length) is not noise, but a critical risk signal.
+   - We utilized **Isolation Forest** to flag anomalies, demonstrating that unusual applications carry inherently different default risks.
+4. **Transparent & Interpretable AI:** We demystified the 'black box' by employing **SHAP** feature importance, explaining precisely why the LightGBM model makes its decisions (e.g., the heavy penalty on high DTI combined with low FICO).
+5. **Model Robustness:** By creating a **Soft Voting Ensemble** (combining the linear stability of Logistic Regression with the non-linear power of LightGBM), we produced a highly generalizable risk engine.
+6. **PCA Factor Loadings:** We explicitly extracted the factor loadings from our PCA components, verifying that Component 1 mathematically represents 'Financial Stability' (driven by Income) and Component 2 represents 'Loan Scale'.
+
+**Final Thoughts:**
+This pipeline successfully transforms raw, imbalanced financial data into actionable, interpretable business intelligence, ready for deployment in a modern credit risk department.
+
