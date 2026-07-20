@@ -279,6 +279,10 @@ To break open the 'black box' of our LightGBM model, we use SHAP (SHapley Additi
 
 ---
 
+**SHAP Beeswarm Insight:** The beeswarm plot above reveals the *directionality* of impact: for example, lower FICO scores (blue dots) strongly push the prediction toward higher risk (positive SHAP values). Now, let's look at the average absolute impact of each feature to see the overall importance ranking.
+
+---
+
 **Key Insight — Model Drivers:** The SHAP summary clearly shows that `fico_range_low` and `dti` (Debt-to-Income) are the most dominant predictors. Furthermore, the non-linear interaction (e.g., high DTI combined with low FICO) heavily drives the model's risk penalty, showcasing why LightGBM outperforms simple linear models.
 
 ---
