@@ -76,6 +76,14 @@ This is more realistic than random split because it simulates production deploym
 
 ---
 
+**Key Findings:**
+- **Class Imbalance**: 4.13:1 ratio (80.5% Fully Paid vs 19.5% Charged Off)
+- **Temporal Drift**: Default rate **doubled** from 12.6% (2009) to 23.1% (2016)
+- Baseline accuracy of 80.5% achieved by predicting all loans as 'Fully Paid'
+- This confirms **OOT split was the right choice** over random split
+
+---
+
 ### 4.2 Structural Missingness Analysis
 
 
@@ -84,14 +92,6 @@ This is more realistic than random split because it simulates production deploym
 **Key Finding**: `emp_length` is **anomalous** — borrowers with missing employment length
 default at **25.7%** vs 19.1% for those with known values. This is a 6.6pp difference!
 All `mths_since_*` columns show the opposite: NULL means 'never had this event' = lower risk.
-
----
-
-**Key Findings:**
-- **Class Imbalance**: 4.13:1 ratio (80.5% Fully Paid vs 19.5% Charged Off)
-- **Temporal Drift**: Default rate **doubled** from 12.6% (2009) to 23.1% (2016)
-- Baseline accuracy of 80.5% achieved by predicting all loans as 'Fully Paid'
-- This confirms **OOT split was the right choice** over random split
 
 ---
 
@@ -120,7 +120,17 @@ All `mths_since_*` columns show the opposite: NULL means 'never had this event' 
 
 ---
 
+**Key Insight — Risk Monotonicity:**
+The plot confirms a strict monotonic relationship between Lending Club's assigned sub-grades and the actual default rate. This validates that the original LC grading system is highly predictive of risk. Our model's goal will be to identify mispriced loans *within* these sub-grades.
+
+---
+
 ### 4.5 Heavy Tails Analysis
+
+---
+
+**Key Insight — Heavy-Tailed Distributions:**
+The log-scale plots reveal that features like `annual_inc` and `revol_bal` have extreme right-skewed heavy tails. In a linear model (like Logistic Regression), these extreme outliers would completely skew the decision boundary. This strongly justifies our decision to prefer robust tree-based models (LightGBM) which are invariant to monotonic transformations and naturally handle outliers.
 
 ---
 
@@ -222,6 +232,11 @@ To complete our visual storytelling, we generate a correlation heatmap of the nu
 
 ---
 
+**Key Insight — Multicollinearity:**
+The heatmap shows minimal extreme correlations among our core features, with the exception of `loan_amnt` and `installment` (which are mathematically coupled). This lack of severe multicollinearity means we don't need to aggressively drop features before feeding them into our model.
+
+---
+
 ## 5. Feature Engineering
 
 ### 5.1 Structural Missingness Flags
@@ -249,6 +264,22 @@ Results are pre-computed in `modeling.py` and saved to `model_results.json`.
 ### 6.2 Visualizations
 
 Load pre-generated model plots:
+
+---
+
+To translate probabilities into hard predictions, we optimize the decision threshold by maximizing the F1-Score.
+
+---
+
+A good model not only ranks risks well but outputs reliable probabilities. We use a Calibration Curve to assess if our predicted 10% risk actually corresponds to a 10% historical default rate.
+
+---
+
+To break open the 'black box' of our LightGBM model, we use SHAP (SHapley Additive exPlanations) values to understand the global drivers of default risk.
+
+---
+
+**Key Insight — Model Drivers:** The SHAP summary clearly shows that `fico_range_low` and `dti` (Debt-to-Income) are the most dominant predictors. Furthermore, the non-linear interaction (e.g., high DTI combined with low FICO) heavily drives the model's risk penalty, showcasing why LightGBM outperforms simple linear models.
 
 ---
 
@@ -314,6 +345,11 @@ This MLP experiment validates our architectural choice: **using the right tool f
 Instead of relying solely on LightGBM, what if we combine its non-linear predictions with Logistic Regression's linear baseline? We create a **Soft Voting Ensemble** to average their predicted probabilities, aiming for a more robust generalized model.
 
 
+
+---
+
+**Key Insight — Ensembling:**
+The Soft Voting ensemble successfully averages the predictions of our models. While the ROC-AUC improvement might be marginal compared to the highly optimized LightGBM, ensembling with a linear or structurally different model adds crucial *robustness* against concept drift in production environments.
 
 ---
 
