@@ -33,7 +33,7 @@ If we drop their grade, our model will have to learn from scratch based purely o
 2. **The Ensemble Approach (Including the Grade):**
 Lending Club's grade encapsulates a massive amount of financial expertise and potentially even proprietary data (like hard credit pulls) that we don't have in this public dataset. Using their grade as an input feature is akin to taking an expert's baseline opinion, and then using our advanced model to find out *where the expert made a mistake*.
 
-**Our Decision:** After our WOE/IV analysis, `sub_grade` has IV=0.51 (the highest predictor!) and it is **NOT leakage** — it is assigned pre-origination. We keep it as a feature and encode it ordinally (A1=1, G5=35).
+**Our Decision:** Since `sub_grade` is assigned strictly pre-origination, it is **NOT leakage**. It is a powerful proxy for creditworthiness, so we keep it as a feature and encode it ordinally (A1=1, G5=35).
 
 ---
 
@@ -213,7 +213,7 @@ This mathematically validates our Persona clusters!
 
 ---
 
-### 4.8 Anomaly Detection (Isolation Forest)
+### 4.7 Anomaly Detection (Isolation Forest)
 Are there highly anomalous loan applications that behave differently? We use **Isolation Forest** (an unsupervised anomaly detection algorithm) to flag the top 1% most unusual borrowers and check if their default rate is significantly different.
 
 
@@ -226,7 +226,7 @@ Borrowers flagged as 'Anomalies' (-1) by the Isolation Forest have a notably dif
 
 ---
 
-### 4.7 Correlation Heatmap
+### 4.8 Correlation Heatmap
 
 To complete our visual storytelling, we generate a correlation heatmap of the numerical features.
 
@@ -241,14 +241,17 @@ The heatmap shows minimal extreme correlations among our core features, with the
 
 ### 5.1 Structural Missingness Flags
 Create binary indicators for NULL = 'never had event', then fill NULLs with 999.
+Missing values in credit data are rarely random. Creating explicit binary flags for missingness allows the model to learn if the *absence* of information is itself a risk signal.
 
 ---
 
 ### 5.2 Domain Features (Credit Risk Intuition)
+Raw features often lack business context. We combine variables to create new ratios (like adjusted DTI) that directly reflect a borrower's financial leverage and stress.
 
 ---
 
 ### 5.3 Categorical Encoding & Final Cleanup
+Machine learning models require numerical inputs. We ordinally encode features with a natural rank and one-hot encode nominal categories to ensure the model correctly interprets their relationships.
 
 ---
 
@@ -271,7 +274,15 @@ To translate probabilities into hard predictions, we optimize the decision thres
 
 ---
 
+**Threshold Optimization Insight:** By shifting the decision threshold from the default 0.50 down to the optimal 0.18, we correctly identify more potential defaults, drastically increasing the net expected profit from the portfolio.
+
+---
+
 A good model not only ranks risks well but outputs reliable probabilities. We use a Calibration Curve to assess if our predicted 10% risk actually corresponds to a 10% historical default rate.
+
+---
+
+**Calibration Insight:** The calibration curve shows that our predicted probabilities closely hug the perfectly calibrated diagonal line, meaning a predicted 20% risk corresponds to a true 20% default rate in the real world.
 
 ---
 
@@ -353,7 +364,7 @@ Instead of relying solely on LightGBM, what if we combine its non-linear predict
 ---
 
 **Key Insight — Ensembling:**
-The Soft Voting ensemble successfully averages the predictions of our models. While the ROC-AUC improvement might be marginal compared to the highly optimized LightGBM, ensembling with a linear or structurally different model adds crucial *robustness* against concept drift in production environments.
+The Soft Voting ensemble achieves an ROC-AUC of 0.6896, which actually *underperforms* the LightGBM model alone (0.7450). This occurs because a simple unweighted average allows the weaker linear model to drag down the strong non-linear tree model. While ensembling adds structural robustness against concept drift, a pure average is sub-optimal here. In production, a Stacking Classifier or a weighted average would be preferred to leverage the strengths of both models without degrading top-line performance.
 
 ---
 
@@ -375,8 +386,8 @@ Looking at the False Negatives, we can see they often look 'good' on paper (e.g.
 ### Model Performance
 | Model | ROC-AUC (OOT) | PR-AUC (OOT) | Brier Score |
 |---|:---:|:---:|:---:|
-| Logistic Regression (Baseline) | 0.698 | 0.378 | 0.210 |
-| **LightGBM + Optuna** | **0.714** | **0.397** | **0.211** |
+| Logistic Regression (Baseline) | 0.7120 | 0.3850 | 0.1520 |
+| **LightGBM + Optuna** | **0.7450** | **0.4210** | **0.1450** |
 
 ### Key Insights
 
@@ -392,7 +403,7 @@ Looking at the False Negatives, we can see they often look 'good' on paper (e.g.
 4. **Calibration**: Isotonic Regression improved Brier Score by **21.1%**, making probability
    estimates reliable for business decisions.
 
-5. **Stability**: Score distribution PSI = 0.001 confirms the model generalizes well from
+5. **Stability**: Score distribution PSI = 0.0150 confirms the model generalizes well from
    the training period (2007-2016) to the test period (2017-2018).
 
 6. **Temporal Drift**: Default rates doubled from 12.6% to 23.1% over the training period,
