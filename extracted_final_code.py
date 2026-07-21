@@ -375,7 +375,7 @@ from IPython.display import display
 
 print("Preparing data for Unsupervised Learning...")
 # Select a subset of continuous financial features
-unsup_features = ['loan_amnt', 'int_rate', 'annual_inc', 'dti', 'revol_util', 'revol_bal']
+unsup_features = ['loan_amnt', 'int_rate', 'total_annual_inc', 'total_dti', 'revol_util', 'revol_bal', "mths_since_last_delinq_never", "mths_since_last_record_never", "mths_since_last_major_derog_never", "mths_since_recent_bc_dlq_never", "mths_since_recent_revol_delinq_never", "mths_since_recent_inq_never"]
 
 # Sample the data to make unsupervised learning faster (100k rows)
 df_unsup = df.select(unsup_features + ['target']).sample(n=100000, seed=42)
@@ -487,7 +487,7 @@ import matplotlib.pyplot as plt
 
 # We already have `pca` and `X_scaled` from previous cells.
 # We also need the feature names used for PCA.
-features = ['loan_amnt', 'int_rate', 'annual_inc', 'dti', 'revol_util', 'revol_bal']
+features = ['loan_amnt', 'int_rate', 'total_annual_inc', 'total_dti', 'revol_util', 'revol_bal', "mths_since_last_delinq_never", "mths_since_last_record_never", "mths_since_last_major_derog_never", "mths_since_recent_bc_dlq_never", "mths_since_recent_revol_delinq_never", "mths_since_recent_inq_never"]
 
 loadings = pd.DataFrame(
     pca.components_.T,
@@ -525,7 +525,7 @@ print(anomaly_stats)
 # CODE CELL
 # ==========================================
 # 1. Correlation Heatmap
-corr_features = ['loan_amnt', 'int_rate', 'installment', 'annual_inc', 'dti', 'fico_range_low', 'revol_util']
+corr_features = ['loan_amnt', 'int_rate', 'installment', 'total_annual_inc', 'total_dti', 'fico_range_low', 'revol_util', "mths_since_last_delinq_never", "mths_since_last_record_never", "mths_since_last_major_derog_never", "mths_since_recent_bc_dlq_never", "mths_since_recent_revol_delinq_never", "mths_since_recent_inq_never"]
 corr_matrix = df.select(corr_features).to_pandas().corr()
 
 plt.figure(figsize=(10, 6))
@@ -626,33 +626,6 @@ print(f'Train shape after encoding: {train_df.shape}')
 # ==========================================
 # CODE CELL
 # ==========================================
-# Load pre-computed results
-with open('model_results.json', 'r') as f:
-    results = json.load(f)
-
-print('=' * 65)
-print('MODEL COMPARISON (Test Set - Out-of-Time)')
-print('=' * 65)
-print(f'{"":45s} | {"ROC-AUC":>8s} | {"PR-AUC":>8s} | {"Brier":>8s}')
-print(f'{"-"*45}-+-{"-"*8}-+-{"-"*8}-+-{"-"*8}')
-
-lr = results['logistic_regression']
-lgb = results['lightgbm_optuna']
-print(f'{"Logistic Regression (Baseline)":45s} | {lr["test_roc_auc"]:8.4f} | {lr["test_pr_auc"]:8.4f} | {lr["brier_score"]:8.4f}')
-print(f'{"LightGBM + Optuna (Challenger)":45s} | {lgb["test_roc_auc"]:8.4f} | {lgb["test_pr_auc"]:8.4f} | {lgb["brier_score"]:8.4f}')
-
-print(f'\nFINANCIAL OPTIMIZATION:')
-thresh = results['threshold_optimization']
-print(f'  Optimal Threshold: {thresh["optimal_threshold_profit"]}')
-print(f'  Net Expected Profit: ${thresh["net_profit"]:,.0f}')
-print(f'  Approval Rate: {thresh["approval_rate"]}%')
-
-print(f'\nSTABILITY:')
-print(f'  Score Distribution PSI: {results["psi"]["score_distribution_psi"]:.4f} (Stable)')
-
-# ==========================================
-# CODE CELL
-# ==========================================
 from IPython.display import Image, display
 
 # Model comparison (ROC + PR curves)
@@ -700,15 +673,22 @@ os.makedirs('model_plots', exist_ok=True)
 
 # Generate X_train and y_train directly from train_df since they are not in pandas yet
 features = [
-    "loan_amnt", "annual_inc", "dti", "revol_util", 
+    "loan_amnt", "total_annual_inc", "total_dti", "revol_util", 
     "fico_range_low", "adjusted_dti", "installment_to_income", 
     "loan_to_income", "estimated_revol_limit", "emp_length_num", 
-    "term_num"
-]
-X_train = train_df.select(features).to_pandas().fillna(0)
+    "term_num", "purpose", "home_ownership", "verification_status"
+, "mths_since_last_delinq_never", "mths_since_last_record_never", "mths_since_last_major_derog_never", "mths_since_recent_bc_dlq_never", "mths_since_recent_revol_delinq_never", "mths_since_recent_inq_never"]
+X_train = train_df.select(features).to_pandas()
 y_train = train_df.select("target").to_pandas()["target"]
-X_test = test_df.select(features).to_pandas().fillna(0)
+X_test = test_df.select(features).to_pandas()
 y_test = test_df.select("target").to_pandas()["target"]
+
+cat_cols = ["purpose", "home_ownership", "verification_status"]
+for col in cat_cols:
+    if col in X_train.columns:
+        X_train[col] = X_train[col].astype('category')
+        X_test[col] = X_test[col].astype('category')
+
 
 import optuna
 def objective(trial):
@@ -719,9 +699,14 @@ def objective(trial):
     }
     model = lgb.LGBMClassifier(**params, random_state=42, verbose=-1)
     # Fast subset for demo
-    model.fit(X_train.iloc[:5000], y_train.iloc[:5000])
-    preds = model.predict_proba(X_train.iloc[5000:7000])[:, 1]
-    return roc_auc_score(y_train.iloc[5000:7000], preds)
+    # 80/20 chronological split of the ENTIRE X_train for Optuna
+    split_idx = int(len(X_train) * 0.8)
+    X_tr, y_tr = X_train.iloc[:split_idx], y_train.iloc[:split_idx]
+    X_va, y_va = X_train.iloc[split_idx:], y_train.iloc[split_idx:]
+    
+    model.fit(X_tr, y_tr, eval_set=[(X_va, y_va)], callbacks=[lgb.early_stopping(50, verbose=False)])
+    preds = model.predict_proba(X_va)[:, 1]
+    return roc_auc_score(y_va, preds)
 
 print("Running Optuna Hyperparameter Optimization (Demo Mode)...")
 try:
@@ -744,7 +729,7 @@ for fold, (train_idx, val_idx) in enumerate(tscv.split(X_train)):
     
     # We use some generic params since we might not have `best_params` cleanly available here
     fold_model = lgb.LGBMClassifier(n_estimators=200, learning_rate=0.05, num_leaves=31, random_state=42, verbose=-1)
-    fold_model.fit(X_fold_train, y_fold_train)
+    fold_model.fit(X_fold_train, y_fold_train, eval_set=[(X_fold_val, y_fold_val)], callbacks=[lgb.early_stopping(30, verbose=False)])
     
     y_pred_proba = fold_model.predict_proba(X_fold_val)[:, 1]
     fold_auc = roc_auc_score(y_fold_val, y_pred_proba)
@@ -822,8 +807,9 @@ def build_mlp(input_dim):
     return model
 
 # We need to impute NaNs for NN
-X_train_nn = X_train.fillna(X_train.median())
-X_test_nn = X_test.fillna(X_train.median())
+cat_cols = ['purpose', 'home_ownership', 'verification_status']
+X_train_nn = X_train.drop(columns=[c for c in cat_cols if c in X_train.columns]).fillna(X_train.drop(columns=[c for c in cat_cols if c in X_train.columns]).median())
+X_test_nn = X_test.drop(columns=[c for c in cat_cols if c in X_test.columns]).fillna(X_train.drop(columns=[c for c in cat_cols if c in X_train.columns]).median())
 
 # Normalization is critical for NN
 from sklearn.preprocessing import StandardScaler
@@ -889,40 +875,20 @@ print(f"{'MLP Neural Network':<25} {mlp_auc:>10.4f}")
 # ==========================================
 # CODE CELL
 # ==========================================
-from sklearn.ensemble import VotingClassifier
-from sklearn.linear_model import LogisticRegression
-import lightgbm as lgb
+# ==========================================
+# FINAL EVALUATION: STANDALONE LIGHTGBM
+# ==========================================
 from sklearn.metrics import roc_auc_score
+import lightgbm as lgb
 
-# Prepare data for quick ensemble demo
-features = [
-    "loan_amnt", "annual_inc", "dti", "revol_util", 
-    "fico_range_low", "adjusted_dti", "installment_to_income", 
-    "loan_to_income", "estimated_revol_limit", "emp_length_num", 
-    "term_num"
-]
-X_train = train_df.select(features).to_pandas().fillna(0)
-y_train = train_df.select("target").to_pandas()["target"]
-X_test = test_df.select(features).to_pandas().fillna(0)
-y_test = test_df.select("target").to_pandas()["target"]
+print("Training Final LightGBM Model on Full Train Set (with native categoricals and NaNs)...")
+# We use robust params.
+final_lgbm = lgb.LGBMClassifier(n_estimators=300, learning_rate=0.05, num_leaves=31, random_state=42, verbose=-1)
+final_lgbm.fit(X_train, y_train)
 
-# Base models
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
-lr = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000))
-lgbm = lgb.LGBMClassifier(n_estimators=100, learning_rate=0.05, random_state=42, verbose=-1)
-
-# Soft Voting Ensemble
-from sklearn.calibration import CalibratedClassifierCV
-calibrated_lgbm = CalibratedClassifierCV(lgbm, method='isotonic', cv=3)
-ensemble = VotingClassifier(estimators=[('lr', lr), ('lgbm', calibrated_lgbm)], voting='soft', weights=[0.2, 0.8])
-ensemble.fit(X_train, y_train)
-
-# Evaluate
-ensemble_preds = ensemble.predict_proba(X_test)[:, 1]
-ensemble_auc = roc_auc_score(y_test, ensemble_preds)
-print(f"Ensemble ROC-AUC on Held-out Test Set: {ensemble_auc:.4f}")
-
+lgbm_preds = final_lgbm.predict_proba(X_test)[:, 1]
+final_auc = roc_auc_score(y_test, lgbm_preds)
+print(f"Final LightGBM ROC-AUC on Held-out OOT Test Set: {final_auc:.4f}")
 
 
 # ==========================================
@@ -934,7 +900,7 @@ import pandas as pd
 
 test_results = X_test.copy()
 test_results['Actual_Default'] = y_test
-test_results['Predicted_Prob'] = ensemble_preds
+test_results['Predicted_Prob'] = lgbm_preds
 
 # False Negatives
 fn_df = test_results[(test_results['Predicted_Prob'] < 0.2) & (test_results['Actual_Default'] == 1)]
