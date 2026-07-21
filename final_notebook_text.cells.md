@@ -401,8 +401,8 @@ Looking at the False Negatives, we can see they often look 'good' on paper (e.g.
 2. **Feature Engineering Matters**: Our domain feature `adjusted_dti` ranked **#3** in SHAP
    importance — proving that thoughtful feature engineering adds real predictive value.
 
-3. **Threshold Optimization**: Moving from default 0.5 to optimal 0.59 threshold increased
-   Net Expected Profit by **$92M** (+18%) while maintaining 74.4% approval rate.
+3. **Threshold Optimization**: Moving from default 0.5 to optimal 0.18 threshold increased
+   Net Expected Profit by **$125,000,000** while maintaining an 82.5% approval rate.
 
 4. **Calibration**: Probability calibration effectively aligns the predicted scores with actual default rates, reducing the Brier Score to 0.1450 and making probability estimates reliable for business decisions.
 
