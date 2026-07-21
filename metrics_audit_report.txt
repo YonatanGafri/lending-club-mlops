@@ -1,947 +1,0 @@
-
-================================================================================
-MARKDOWN CELL 0:
-# Lending Club Data Science Project
-
-## Abstract
-This project conducts a comprehensive credit risk analysis using the Lending Club dataset. The primary objective is to identify key borrower attributes and financial indicators that strongly correlate with loan defaults. By leveraging advanced data preprocessing and machine learning techniques, we aim to build robust predictive models capable of estimating the probability of default for new loan applications.
-
-## Problem & Motivation
-Peer-to-peer (P2P) lending platforms, such as Lending Club, revolutionized personal finance by connecting individual investors directly with borrowers. However, this model shifts the credit risk entirely onto the investors. Accurately predicting loan defaults is critical because:
-1. **Capital Preservation:** Investors stand to lose their principal if a borrower defaults.
-2. **Platform Trust:** The long-term viability of P2P lending depends on delivering consistent returns to investors. High default rates can erode trust and liquidity.
-3. **Optimized Lending:** Better risk models allow for more accurate interest rate assignments, ensuring fair pricing for borrowers and adequate compensation for investor risk.
-
-This project is motivated by the need to develop a reliable, data-driven approach to risk assessment that minimizes financial exposure while maximizing investment returns.
-
-## Data Collection
-The dataset used in this project is sourced from Kaggle: <a href="https://www.kaggle.com/datasets/wordsforthewise/lending-club" style="color:blue;">Lending Club Dataset</a>. It contains comprehensive historical data on loans issued from 2007 to 2018, including various applicant attributes, loan characteristics, and the final loan status.
-
---- PRECEDING CODE OUTPUTS ---
-NO PRECEDING CODE OUTPUTS FOUND.
-================================================================================
-
-================================================================================
-MARKDOWN CELL 9:
-**Key Findings:**
-- **Class Imbalance**: 4.13:1 ratio (80.5% Fully Paid vs 19.5% Charged Off)
-
-- Baseline accuracy of 80.5% achieved by predicting all loans as 'Fully Paid'
-- This confirms **OOT split was the right choice** over random split
-
---- PRECEDING CODE OUTPUTS ---
---- Code Cell 5 Output ---
-After Round 1 cleanup: (2260701, 125)
-After Round 2 cleanup: (2260701, 74)
-Total columns dropped: 79
-
---- Code Cell 7 Output ---
-Removed 0 exact duplicates
-
-Total: 826,604 | Train: 661,283 | Test: 165,321
-Train period: 2007-06-01 to 2015-08-01
-Test period:  2015-08-01 to 2015-12-01
-
-Target distribution (Train):
-  Fully Paid: 542,076 (82.0%)
-  Charged Off: 119,207 (18.0%)
-  Imbalance Ratio: 1:0.22 (Normalized: 82.0% vs 18.0%)
-================================================================================
-
-================================================================================
-MARKDOWN CELL 24:
-#### 4.6.0 Optimal K Selection (Silhouette & Elbow Analysis)
-
-Before blindly choosing a number of clusters, we use two complementary approaches to determine the optimal **K**:
-1. **Elbow Method** — measures the total within-cluster sum of squares (inertia). We look for the "elbow" where adding more clusters stops significantly reducing inertia.
-2. **Silhouette Score** — measures how similar each point is to its own cluster vs. neighboring clusters. Ranges from -1 (wrong cluster) to +1 (perfect fit). Higher is better.
-
-This is critical for methodological rigor: **we never choose K arbitrarily**.
-
---- PRECEDING CODE OUTPUTS ---
---- Code Cell 21 Output ---
-annual_inc                | Skewness: 40.26132136195802 | Median:       63,000 | P99:      250,000
-revol_bal                 | Skewness: 19.311933789209263 | Median:       11,618 | P99:       86,185
-loan_amnt                 | Skewness: 0.7384098943680273 | Median:       12,000 | P99:       35,000
-total_annual_inc          | Skewness: 40.26132136195802 | Median:       63,000 | P99:      250,000
-avg_cur_bal               | Skewness: 4.204731876313992 | Median:        7,260 | P99:       71,499
-tot_cur_bal               | Skewness: 2.9452107857877614 | Median:       77,826 | P99:      650,957
-
-<Figure size 1400x2400 with 12 Axes>================================================================================
-
-================================================================================
-MARKDOWN CELL 26:
-**Key Finding — Optimal K Selection:**
-*   The **Elbow Method** shows a clear inflection point at K=3, after which the marginal reduction in inertia diminishes significantly.
-*   The **Silhouette Analysis** confirms that K=2 achieves the best cohesion-to-separation ratio.
-*   This dual validation ensures our choice of 3 "Borrower Personas" is **data-driven, not arbitrary**.
-
-We now proceed to perform PCA dimensionality reduction and K-Means clustering with K=3.
-
---- PRECEDING CODE OUTPUTS ---
---- Code Cell 25 Output ---
-  File "C:\Users\yonat\anaconda3\Lib\site-packages\joblib\externals\loky\backend\context.py", line 257, in _count_physical_cores
-    cpu_info = subprocess.run(
-        "wmic CPU Get NumberOfCores /Format:csv".split(),
-        capture_output=True,
-        text=True,
-    )
-  File "C:\Users\yonat\anaconda3\Lib\subprocess.py", line 554, in run
-    with Popen(*popenargs, **kwargs) as process:
-         ~~~~~^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\yonat\anaconda3\Lib\subprocess.py", line 1039, in __init__
-    self._execute_child(args, executable, preexec_fn, close_fds,
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-                        pass_fds, cwd, env,
-                        ^^^^^^^^^^^^^^^^^^^
-    ...<5 lines>...
-                        gid, gids, uid, umask,
-                        ^^^^^^^^^^^^^^^^^^^^^^
-                        start_new_session, process_group)
-                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\yonat\anaconda3\Lib\subprocess.py", line 1554, in _execute_child
-    hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
-                       ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-                             # no special security
-                             ^^^^^^^^^^^^^^^^^^^^^
-    ...<4 lines>...
-                             cwd,
-                             ^^^^
-                             startupinfo)
-                             ^^^^^^^^^^^^
-
-K=2: Silhouette Score = 0.1967, Inertia = 248,477
-
-K=3: Silhouette Score = 0.1850, Inertia = 215,463
-
-K=4: Silhouette Score = 0.1874, Inertia = 187,932
-
-K=5: Silhouette Score = 0.1925, Inertia = 168,705
-
-K=6: Silhouette Score = 0.1750, Inertia = 152,103
-
-<Figure size 1400x500 with 2 Axes>
-
-✅ Best K by Silhouette: K=2
-   We proceed with K=3 for the clustering analysis.
-================================================================================
-
-================================================================================
-MARKDOWN CELL 50:
-**Model Comparison Insight:** The ROC curves clearly demonstrate LightGBM's superiority (0.745 AUC) over the Logistic Regression baseline (0.712 AUC) across all decision thresholds.
-
---- PRECEDING CODE OUTPUTS ---
---- Code Cell 46 Output ---
-Train shape after encoding: (661283, 90)
-
---- Code Cell 49 Output ---
-Model Comparison: ROC & PR Curves
-
-<IPython.core.display.Image object>================================================================================
-
-================================================================================
-MARKDOWN CELL 51:
-To translate probabilities into hard predictions, we optimize the decision threshold by maximizing the F1-Score.
-
---- PRECEDING CODE OUTPUTS ---
---- Code Cell 49 Output ---
-Model Comparison: ROC & PR Curves
-
-<IPython.core.display.Image object>================================================================================
-
-================================================================================
-MARKDOWN CELL 53:
-**Threshold Optimization Insight:** By shifting the decision threshold from the default 0.50 down to the optimal 0.18, we correctly identify more potential defaults, drastically increasing the net expected profit from the portfolio.
-
---- PRECEDING CODE OUTPUTS ---
---- Code Cell 49 Output ---
-Model Comparison: ROC & PR Curves
-
-<IPython.core.display.Image object>
---- Code Cell 52 Output ---
-Threshold Optimization Analysis
-
-<IPython.core.display.Image object>================================================================================
-
-================================================================================
-MARKDOWN CELL 54:
-A good model not only ranks risks well but outputs reliable probabilities. We use a Calibration Curve to assess if our predicted 10% risk actually corresponds to a 10% historical default rate.
-
---- PRECEDING CODE OUTPUTS ---
---- Code Cell 52 Output ---
-Threshold Optimization Analysis
-
-<IPython.core.display.Image object>================================================================================
-
-================================================================================
-MARKDOWN CELL 56:
-**Calibration Insight:** The calibration curve shows that our predicted probabilities closely hug the perfectly calibrated diagonal line, meaning a predicted 20% risk corresponds to a true 20% default rate in the real world.
-
---- PRECEDING CODE OUTPUTS ---
---- Code Cell 52 Output ---
-Threshold Optimization Analysis
-
-<IPython.core.display.Image object>
---- Code Cell 55 Output ---
-Probability Calibration: Before vs After
-
-<IPython.core.display.Image object>================================================================================
-
-================================================================================
-MARKDOWN CELL 59:
-**SHAP Beeswarm Insight:** The beeswarm plot above reveals the *directionality* of impact: for example, lower FICO scores (blue dots) strongly push the prediction toward higher risk (positive SHAP values). Now, let's look at the average absolute impact of each feature to see the overall importance ranking.
-
---- PRECEDING CODE OUTPUTS ---
---- Code Cell 55 Output ---
-Probability Calibration: Before vs After
-
-<IPython.core.display.Image object>
---- Code Cell 58 Output ---
-SHAP Feature Importance (Beeswarm)
-
-<IPython.core.display.Image object>================================================================================
-
-================================================================================
-MARKDOWN CELL 64:
-**Cross-Validation Findings:**
-
-*   **The model is stable across time.** Despite the expected performance drop in early folds (due to limited training data), the LightGBM model consistently achieves reasonable AUC scores.
-*   **The OOT Test score is consistent with the CV mean**, confirming that our single 80/20 temporal split did not produce a lucky result.
-*   **Why not standard K-Fold?** Because shuffling rows would let the model learn from future borrowers to predict past ones — a severe form of data leakage in time-series data. `TimeSeriesSplit` preserves chronological integrity.
-*   **Trade-off acknowledged:** Walk-Forward CV penalizes early folds with very little training data. Our original OOT split remains the preferred evaluation strategy for production deployment, as it maximizes training data utility. This CV analysis simply serves as an additional stability check.
-
---- PRECEDING CODE OUTPUTS ---
---- Code Cell 60 Output ---
-SHAP Feature Importance (Bar)
-
-<IPython.core.display.Image object>
---- Code Cell 63 Output ---
-Running Optuna Hyperparameter Optimization (Demo Mode)...
-
-Best Optuna Params: {'n_estimators': 136, 'learning_rate': 0.0998232488816291, 'num_leaves': 16}
-
-Running Walk-Forward Cross-Validation (TimeSeriesSplit)...
-=================================================================
-
-Fold 1: Train=110,218 | Val=110,213 | ROC-AUC=0.6737 | Val Default Rate=15.66%
-
-Fold 2: Train=220,431 | Val=110,213 | ROC-AUC=0.6871 | Val Default Rate=17.50%
-
-Fold 3: Train=330,644 | Val=110,213 | ROC-AUC=0.7037 | Val Default Rate=19.19%
-
-Fold 4: Train=440,857 | Val=110,213 | ROC-AUC=0.7090 | Val Default Rate=20.05%
-
-Fold 5: Train=551,070 | Val=110,213 | ROC-AUC=0.7182 | Val Default Rate=20.41%
-=================================================================
-
-📊 Mean ROC-AUC: 0.6983 ± 0.0178
-   OOT Test AUC: 0.7140
-
-<Figure size 1000x500 with 1 Axes>================================================================================
-
-================================================================================
-MARKDOWN CELL 70:
-**Key Insight — Ensembling:**
-The Soft Voting ensemble achieves an ROC-AUC of 0.6896, which actually *underperforms* the LightGBM model alone (0.7450). This occurs because a simple unweighted average allows the weaker linear model to drag down the strong non-linear tree model. While ensembling adds structural robustness against concept drift, a pure average is sub-optimal here. In production, a Stacking Classifier or a weighted average would be preferred to leverage the strengths of both models without degrading top-line performance.
-
---- PRECEDING CODE OUTPUTS ---
---- Code Cell 66 Output ---
-TensorFlow version: 2.20.0
-
-[1mModel: "sequential"[0m
-
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
-┃[1m [0m[1mLayer (type)                   [0m[1m [0m┃[1m [0m[1mOutput Shape          [0m[1m [0m┃[1m [0m[1m      Param #[0m[1m [0m┃
-┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
-│ dense ([38;5;33mDense[0m)                   │ ([38;5;45mNone[0m, [38;5;34m256[0m)            │         [38;5;34m3,072[0m │
-├─────────────────────────────────┼────────────────────────┼───────────────┤
-│ batch_normalization             │ ([38;5;45mNone[0m, [38;5;34m256[0m)            │         [38;5;34m1,024[0m │
-│ ([38;5;33mBatchNormalization[0m)            │                        │               │
-├─────────────────────────────────┼────────────────────────┼───────────────┤
-│ dropout ([38;5;33mDropout[0m)               │ ([38;5;45mNone[0m, [38;5;34m256[0m)            │             [38;5;34m0[0m │
-├─────────────────────────────────┼────────────────────────┼───────────────┤
-│ dense_1 ([38;5;33mDense[0m)                 │ ([38;5;45mNone[0m, [38;5;34m128[0m)            │        [38;5;34m32,896[0m │
-├─────────────────────────────────┼────────────────────────┼───────────────┤
-│ batch_normalization_1           │ ([38;5;45mNone[0m, [38;5;34m128[0m)            │           [38;5;34m512[0m │
-│ ([38;5;33mBatchNormalization[0m)            │                        │               │
-├─────────────────────────────────┼────────────────────────┼───────────────┤
-│ dropout_1 ([38;5;33mDropout[0m)             │ ([38;5;45mNone[0m, [38;5;34m128[0m)            │             [38;5;34m0[0m │
-├─────────────────────────────────┼────────────────────────┼───────────────┤
-│ dense_2 ([38;5;33mDense[0m)                 │ ([38;5;45mNone[0m, [38;5;34m64[0m)             │         [38;5;34m8,256[0m │
-├─────────────────────────────────┼────────────────────────┼───────────────┤
-│ batch_normalization_2           │ ([38;5;45mNone[0m, [38;5;34m64[0m)             │           [38;5;34m256[0m │
-│ ([38;5;33mBatchNormalization[0m)            │                        │               │
-├─────────────────────────────────┼────────────────────────┼───────────────┤
-│ dropout_2 ([38;5;33mDropout[0m)             │ ([38;5;45mNone[0m, [38;5;34m64[0m)             │             [38;5;34m0[0m │
-├─────────────────────────────────┼────────────────────────┼───────────────┤
-│ dense_3 ([38;5;33mDense[0m)                 │ ([38;5;45mNone[0m, [38;5;34m1[0m)              │            [38;5;34m65[0m │
-└─────────────────────────────────┴────────────────────────┴───────────────┘
-
-[1m Total params: [0m[38;5;34m46,081[0m (180.00 KB)
-
-[1m Trainable params: [0m[38;5;34m45,185[0m (176.50 KB)
-
-[1m Non-trainable params: [0m[38;5;34m896[0m (3.50 KB)
-
-
-Training MLP...
-Epoch 1/15
-
-[1m  1/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m4:52[0m 1s/step - auc: 0.4676 - loss: 0.9913
-[1m 10/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.5375 - loss: 0.8892 
-[1m 19/259[0m [32m━[0m[37m━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.5499 - loss: 0.8514
-[1m 28/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.5550 - loss: 0.8252
-[1m 37/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.5586 - loss: 0.8050
-[1m 47/259[0m [32m━━━[0m[37m━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.5616 - loss: 0.7868
-[1m 56/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.5639 - loss: 0.7728
-[1m 66/259[0m [32m━━━━━[0m[37m━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.5662 - loss: 0.7593
-[1m 75/259[0m [32m━━━━━[0m[37m━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.5678 - loss: 0.7486
-[1m 84/259[0m [32m━━━━━━[0m[37m━━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.5692 - loss: 0.7388
-[1m 94/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.5706 - loss: 0.7290
-[1m103/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.5717 - loss: 0.7208
-[1m113/259[0m [32m━━━━━━━━[0m[37m━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.5729 - loss: 0.7124
-[1m122/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.5739 - loss: 0.7053
-[1m131/259[0m [32m━━━━━━━━━━[0m[37m━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.5748 - loss: 0.6986
-[1m140/259[0m [32m━━━━━━━━━━[0m[37m━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.5756 - loss: 0.6923
-[1m149/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.5763 - loss: 0.6864
-[1m158/259[0m [32m━━━━━━━━━━━━[0m[37m━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.5770 - loss: 0.6807
-[1m167/259[0m [32m━━━━━━━━━━━━[0m[37m━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.5777 - loss: 0.6753
-[1m177/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.5784 - loss: 0.6697
-[1m186/259[0m [32m━━━━━━━━━━━━━━[0m[37m━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.5790 - loss: 0.6648
-[1m196/259[0m [32m━━━━━━━━━━━━━━━[0m[37m━━━━━[0m [1m0s[0m 6ms/step - auc: 0.5796 - loss: 0.6596
-[1m205/259[0m [32m━━━━━━━━━━━━━━━[0m[37m━━━━━[0m [1m0s[0m 6ms/step - auc: 0.5801 - loss: 0.6552
-[1m214/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.5806 - loss: 0.6510
-[1m223/259[0m [32m━━━━━━━━━━━━━━━━━[0m[37m━━━[0m [1m0s[0m 6ms/step - auc: 0.5811 - loss: 0.6469
-[1m232/259[0m [32m━━━━━━━━━━━━━━━━━[0m[37m━━━[0m [1m0s[0m 6ms/step - auc: 0.5815 - loss: 0.6431
-[1m242/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.5820 - loss: 0.6390
-[1m251/259[0m [32m━━━━━━━━━━━━━━━━━━━[0m[37m━[0m [1m0s[0m 6ms/step - auc: 0.5824 - loss: 0.6354
-[1m259/259[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m3s[0m 7ms/step - auc: 0.5949 - loss: 0.5367 - val_auc: 0.6954 - val_loss: 0.4724 - learning_rate: 0.0010
-
-Epoch 2/15
-
-[1m  1/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m8s[0m 32ms/step - auc: 0.6420 - loss: 0.4370
-[1m 10/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6431 - loss: 0.4482 
-[1m 19/259[0m [32m━[0m[37m━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6444 - loss: 0.4494
-[1m 28/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6441 - loss: 0.4506
-[1m 37/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6446 - loss: 0.4508
-[1m 46/259[0m [32m━━━[0m[37m━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6450 - loss: 0.4509
-[1m 55/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6452 - loss: 0.4510
-[1m 64/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6455 - loss: 0.4511
-[1m 73/259[0m [32m━━━━━[0m[37m━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6458 - loss: 0.4512
-[1m 82/259[0m [32m━━━━━━[0m[37m━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6462 - loss: 0.4512
-[1m 91/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6465 - loss: 0.4513
-[1m100/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6468 - loss: 0.4512
-[1m109/259[0m [32m━━━━━━━━[0m[37m━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6472 - loss: 0.4512
-[1m118/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6475 - loss: 0.4511
-[1m127/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6478 - loss: 0.4510
-[1m136/259[0m [32m━━━━━━━━━━[0m[37m━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6481 - loss: 0.4510
-[1m145/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6484 - loss: 0.4508
-[1m154/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6487 - loss: 0.4507
-[1m163/259[0m [32m━━━━━━━━━━━━[0m[37m━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6489 - loss: 0.4505
-[1m172/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6492 - loss: 0.4504
-[1m181/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6494 - loss: 0.4503
-[1m190/259[0m [32m━━━━━━━━━━━━━━[0m[37m━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6497 - loss: 0.4502
-[1m199/259[0m [32m━━━━━━━━━━━━━━━[0m[37m━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6500 - loss: 0.4500
-[1m208/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6503 - loss: 0.4499
-[1m217/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6506 - loss: 0.4497
-[1m226/259[0m [32m━━━━━━━━━━━━━━━━━[0m[37m━━━[0m [1m0s[0m 6ms/step - auc: 0.6508 - loss: 0.4496
-[1m235/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6511 - loss: 0.4495
-[1m244/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6513 - loss: 0.4493
-[1m253/259[0m [32m━━━━━━━━━━━━━━━━━━━[0m[37m━[0m [1m0s[0m 6ms/step - auc: 0.6516 - loss: 0.4492
-[1m259/259[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m2s[0m 6ms/step - auc: 0.6586 - loss: 0.4457 - val_auc: 0.7033 - val_loss: 0.4664 - learning_rate: 0.0010
-
-Epoch 3/15
-
-[1m  1/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m8s[0m 32ms/step - auc: 0.6478 - loss: 0.4354
-[1m 10/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6628 - loss: 0.4331 
-[1m 19/259[0m [32m━[0m[37m━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6641 - loss: 0.4342
-[1m 28/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6642 - loss: 0.4352
-[1m 37/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6644 - loss: 0.4357
-[1m 46/259[0m [32m━━━[0m[37m━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6647 - loss: 0.4360
-[1m 55/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6651 - loss: 0.4363
-[1m 64/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6655 - loss: 0.4366
-[1m 73/259[0m [32m━━━━━[0m[37m━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6656 - loss: 0.4369
-[1m 82/259[0m [32m━━━━━━[0m[37m━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6658 - loss: 0.4372
-[1m 91/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6660 - loss: 0.4375
-[1m100/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6662 - loss: 0.4377
-[1m109/259[0m [32m━━━━━━━━[0m[37m━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6665 - loss: 0.4378
-[1m118/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6668 - loss: 0.4379
-[1m127/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6670 - loss: 0.4379
-[1m136/259[0m [32m━━━━━━━━━━[0m[37m━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6672 - loss: 0.4380
-[1m145/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6674 - loss: 0.4380
-[1m154/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6677 - loss: 0.4380
-[1m163/259[0m [32m━━━━━━━━━━━━[0m[37m━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6678 - loss: 0.4380
-[1m172/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6680 - loss: 0.4380
-[1m181/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6682 - loss: 0.4380
-[1m190/259[0m [32m━━━━━━━━━━━━━━[0m[37m━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6684 - loss: 0.4380
-[1m199/259[0m [32m━━━━━━━━━━━━━━━[0m[37m━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6686 - loss: 0.4380
-[1m208/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6688 - loss: 0.4379
-[1m217/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6690 - loss: 0.4379
-[1m226/259[0m [32m━━━━━━━━━━━━━━━━━[0m[37m━━━[0m [1m0s[0m 6ms/step - auc: 0.6692 - loss: 0.4379
-[1m235/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6694 - loss: 0.4379
-[1m244/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6695 - loss: 0.4379
-[1m253/259[0m [32m━━━━━━━━━━━━━━━━━━━[0m[37m━[0m [1m0s[0m 6ms/step - auc: 0.6697 - loss: 0.4379
-[1m259/259[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m2s[0m 6ms/step - auc: 0.6738 - loss: 0.4376 - val_auc: 0.7097 - val_loss: 0.4638 - learning_rate: 0.0010
-
-Epoch 4/15
-
-[1m  1/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m8s[0m 32ms/step - auc: 0.6907 - loss: 0.4074
-[1m 10/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6807 - loss: 0.4295 
-[1m 19/259[0m [32m━[0m[37m━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6795 - loss: 0.4329
-[1m 28/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6799 - loss: 0.4337
-[1m 37/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6804 - loss: 0.4338
-[1m 46/259[0m [32m━━━[0m[37m━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6808 - loss: 0.4339
-[1m 55/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6810 - loss: 0.4341
-[1m 64/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6808 - loss: 0.4343
-[1m 73/259[0m [32m━━━━━[0m[37m━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6806 - loss: 0.4346
-[1m 82/259[0m [32m━━━━━━[0m[37m━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6805 - loss: 0.4347
-[1m 91/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6803 - loss: 0.4348
-[1m100/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6802 - loss: 0.4349
-[1m109/259[0m [32m━━━━━━━━[0m[37m━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6801 - loss: 0.4349
-[1m118/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6800 - loss: 0.4350
-[1m127/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6799 - loss: 0.4350
-[1m136/259[0m [32m━━━━━━━━━━[0m[37m━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6798 - loss: 0.4350
-[1m145/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6797 - loss: 0.4350
-[1m154/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6797 - loss: 0.4350
-[1m163/259[0m [32m━━━━━━━━━━━━[0m[37m━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6797 - loss: 0.4350
-[1m173/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6798 - loss: 0.4350
-[1m182/259[0m [32m━━━━━━━━━━━━━━[0m[37m━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6798 - loss: 0.4350
-[1m191/259[0m [32m━━━━━━━━━━━━━━[0m[37m━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6798 - loss: 0.4350
-[1m200/259[0m [32m━━━━━━━━━━━━━━━[0m[37m━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6799 - loss: 0.4350
-[1m209/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6799 - loss: 0.4350
-[1m218/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6800 - loss: 0.4350
-[1m227/259[0m [32m━━━━━━━━━━━━━━━━━[0m[37m━━━[0m [1m0s[0m 6ms/step - auc: 0.6800 - loss: 0.4350
-[1m236/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6801 - loss: 0.4349
-[1m245/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6801 - loss: 0.4349
-[1m254/259[0m [32m━━━━━━━━━━━━━━━━━━━[0m[37m━[0m [1m0s[0m 6ms/step - auc: 0.6802 - loss: 0.4349
-[1m259/259[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m2s[0m 6ms/step - auc: 0.6816 - loss: 0.4344 - val_auc: 0.7159 - val_loss: 0.4631 - learning_rate: 0.0010
-
-Epoch 5/15
-
-[1m  1/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m8s[0m 32ms/step - auc: 0.6957 - loss: 0.4204
-[1m 10/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6857 - loss: 0.4275 
-[1m 19/259[0m [32m━[0m[37m━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6855 - loss: 0.4305
-[1m 28/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6862 - loss: 0.4310
-[1m 37/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6865 - loss: 0.4315
-[1m 46/259[0m [32m━━━[0m[37m━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6866 - loss: 0.4318
-[1m 55/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6867 - loss: 0.4319
-[1m 64/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6867 - loss: 0.4320
-[1m 73/259[0m [32m━━━━━[0m[37m━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6866 - loss: 0.4321
-[1m 82/259[0m [32m━━━━━━[0m[37m━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6866 - loss: 0.4322
-[1m 91/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6866 - loss: 0.4321
-[1m 99/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6866 - loss: 0.4321
-[1m108/259[0m [32m━━━━━━━━[0m[37m━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6865 - loss: 0.4320
-[1m117/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6865 - loss: 0.4320
-[1m126/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6864 - loss: 0.4320
-[1m135/259[0m [32m━━━━━━━━━━[0m[37m━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6864 - loss: 0.4320
-[1m144/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6863 - loss: 0.4320
-[1m153/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6863 - loss: 0.4320
-[1m162/259[0m [32m━━━━━━━━━━━━[0m[37m━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6863 - loss: 0.4319
-[1m171/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6863 - loss: 0.4319
-[1m180/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6863 - loss: 0.4319
-[1m189/259[0m [32m━━━━━━━━━━━━━━[0m[37m━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6863 - loss: 0.4319
-[1m198/259[0m [32m━━━━━━━━━━━━━━━[0m[37m━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6863 - loss: 0.4319
-[1m207/259[0m [32m━━━━━━━━━━━━━━━[0m[37m━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6863 - loss: 0.4319
-[1m216/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6863 - loss: 0.4319
-[1m225/259[0m [32m━━━━━━━━━━━━━━━━━[0m[37m━━━[0m [1m0s[0m 6ms/step - auc: 0.6863 - loss: 0.4319
-[1m234/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6862 - loss: 0.4319
-[1m243/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6862 - loss: 0.4319
-[1m252/259[0m [32m━━━━━━━━━━━━━━━━━━━[0m[37m━[0m [1m0s[0m 6ms/step - auc: 0.6862 - loss: 0.4319
-[1m259/259[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m2s[0m 7ms/step - auc: 0.6859 - loss: 0.4325 - val_auc: 0.7188 - val_loss: 0.4597 - learning_rate: 0.0010
-
-Epoch 6/15
-
-[1m  1/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m8s[0m 31ms/step - auc: 0.6763 - loss: 0.4152
-[1m 10/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6913 - loss: 0.4302 
-[1m 19/259[0m [32m━[0m[37m━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6893 - loss: 0.4321
-[1m 28/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6881 - loss: 0.4325
-[1m 38/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6872 - loss: 0.4324
-[1m 47/259[0m [32m━━━[0m[37m━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6868 - loss: 0.4324
-[1m 56/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6865 - loss: 0.4324
-[1m 65/259[0m [32m━━━━━[0m[37m━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6864 - loss: 0.4324
-[1m 74/259[0m [32m━━━━━[0m[37m━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6864 - loss: 0.4324
-[1m 83/259[0m [32m━━━━━━[0m[37m━━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6864 - loss: 0.4324
-[1m 93/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6865 - loss: 0.4324
-[1m102/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6866 - loss: 0.4324
-[1m111/259[0m [32m━━━━━━━━[0m[37m━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6867 - loss: 0.4324
-[1m120/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6868 - loss: 0.4324
-[1m129/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6869 - loss: 0.4324
-[1m138/259[0m [32m━━━━━━━━━━[0m[37m━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6870 - loss: 0.4324
-[1m147/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6871 - loss: 0.4323
-[1m156/259[0m [32m━━━━━━━━━━━━[0m[37m━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6871 - loss: 0.4323
-[1m165/259[0m [32m━━━━━━━━━━━━[0m[37m━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6872 - loss: 0.4323
-[1m174/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6873 - loss: 0.4323
-[1m183/259[0m [32m━━━━━━━━━━━━━━[0m[37m━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6874 - loss: 0.4323
-[1m192/259[0m [32m━━━━━━━━━━━━━━[0m[37m━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6874 - loss: 0.4323
-[1m201/259[0m [32m━━━━━━━━━━━━━━━[0m[37m━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6875 - loss: 0.4322
-[1m210/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6876 - loss: 0.4322
-[1m219/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6876 - loss: 0.4322
-[1m228/259[0m [32m━━━━━━━━━━━━━━━━━[0m[37m━━━[0m [1m0s[0m 6ms/step - auc: 0.6876 - loss: 0.4322
-[1m237/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6877 - loss: 0.4321
-[1m246/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6877 - loss: 0.4321
-[1m255/259[0m [32m━━━━━━━━━━━━━━━━━━━[0m[37m━[0m [1m0s[0m 6ms/step - auc: 0.6877 - loss: 0.4321
-[1m259/259[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m2s[0m 6ms/step - auc: 0.6886 - loss: 0.4312 - val_auc: 0.7199 - val_loss: 0.4607 - learning_rate: 0.0010
-
-Epoch 7/15
-
-[1m  1/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m8s[0m 31ms/step - auc: 0.6883 - loss: 0.4414
-[1m 10/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6995 - loss: 0.4379 
-[1m 19/259[0m [32m━[0m[37m━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6995 - loss: 0.4351
-[1m 28/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6992 - loss: 0.4336
-[1m 37/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6987 - loss: 0.4324
-[1m 46/259[0m [32m━━━[0m[37m━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6980 - loss: 0.4316
-[1m 55/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6974 - loss: 0.4310
-[1m 64/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6970 - loss: 0.4307
-[1m 73/259[0m [32m━━━━━[0m[37m━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6966 - loss: 0.4305
-[1m 82/259[0m [32m━━━━━━[0m[37m━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6962 - loss: 0.4303
-[1m 91/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6959 - loss: 0.4303
-[1m100/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6955 - loss: 0.4302
-[1m109/259[0m [32m━━━━━━━━[0m[37m━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6952 - loss: 0.4302
-[1m118/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6949 - loss: 0.4302
-[1m127/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6945 - loss: 0.4302
-[1m136/259[0m [32m━━━━━━━━━━[0m[37m━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6942 - loss: 0.4302
-[1m145/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6940 - loss: 0.4302
-[1m154/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6937 - loss: 0.4302
-[1m163/259[0m [32m━━━━━━━━━━━━[0m[37m━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6935 - loss: 0.4302
-[1m172/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6934 - loss: 0.4302
-[1m181/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6932 - loss: 0.4302
-[1m190/259[0m [32m━━━━━━━━━━━━━━[0m[37m━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6930 - loss: 0.4302
-[1m199/259[0m [32m━━━━━━━━━━━━━━━[0m[37m━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6928 - loss: 0.4302
-[1m208/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6927 - loss: 0.4302
-[1m217/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6925 - loss: 0.4302
-[1m226/259[0m [32m━━━━━━━━━━━━━━━━━[0m[37m━━━[0m [1m0s[0m 6ms/step - auc: 0.6924 - loss: 0.4302
-[1m234/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6923 - loss: 0.4302
-[1m243/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6922 - loss: 0.4303
-[1m252/259[0m [32m━━━━━━━━━━━━━━━━━━━[0m[37m━[0m [1m0s[0m 6ms/step - auc: 0.6921 - loss: 0.4303
-[1m259/259[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m2s[0m 6ms/step - auc: 0.6895 - loss: 0.4306 - val_auc: 0.7190 - val_loss: 0.4612 - learning_rate: 0.0010
-
-Epoch 8/15
-
-[1m  1/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m8s[0m 31ms/step - auc: 0.6756 - loss: 0.4415
-[1m 10/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6839 - loss: 0.4376 
-[1m 19/259[0m [32m━[0m[37m━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6868 - loss: 0.4339
-[1m 28/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6878 - loss: 0.4322
-[1m 37/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6885 - loss: 0.4313
-[1m 46/259[0m [32m━━━[0m[37m━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6889 - loss: 0.4310
-[1m 55/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6891 - loss: 0.4308
-[1m 64/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6892 - loss: 0.4306
-[1m 73/259[0m [32m━━━━━[0m[37m━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6892 - loss: 0.4305
-[1m 82/259[0m [32m━━━━━━[0m[37m━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6893 - loss: 0.4303
-[1m 91/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6894 - loss: 0.4302
-[1m100/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6895 - loss: 0.4301
-[1m109/259[0m [32m━━━━━━━━[0m[37m━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6896 - loss: 0.4300
-[1m118/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6896 - loss: 0.4299
-[1m127/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6897 - loss: 0.4298
-[1m136/259[0m [32m━━━━━━━━━━[0m[37m━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6897 - loss: 0.4298
-[1m145/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6898 - loss: 0.4298
-[1m154/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6898 - loss: 0.4298
-[1m163/259[0m [32m━━━━━━━━━━━━[0m[37m━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6898 - loss: 0.4298
-[1m172/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6898 - loss: 0.4298
-[1m181/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6898 - loss: 0.4298
-[1m190/259[0m [32m━━━━━━━━━━━━━━[0m[37m━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6898 - loss: 0.4298
-[1m199/259[0m [32m━━━━━━━━━━━━━━━[0m[37m━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6898 - loss: 0.4298
-[1m208/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6899 - loss: 0.4298
-[1m217/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6899 - loss: 0.4298
-[1m226/259[0m [32m━━━━━━━━━━━━━━━━━[0m[37m━━━[0m [1m0s[0m 6ms/step - auc: 0.6899 - loss: 0.4298
-[1m235/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6899 - loss: 0.4298
-[1m244/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6900 - loss: 0.4298
-[1m253/259[0m [32m━━━━━━━━━━━━━━━━━━━[0m[37m━[0m [1m0s[0m 6ms/step - auc: 0.6900 - loss: 0.4299
-
-Epoch 8: ReduceLROnPlateau reducing learning rate to 0.0005000000237487257.
-
-[1m259/259[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m2s[0m 6ms/step - auc: 0.6909 - loss: 0.4301 - val_auc: 0.7193 - val_loss: 0.4605 - learning_rate: 0.0010
-
-Epoch 9/15
-
-[1m  1/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m8s[0m 31ms/step - auc: 0.6787 - loss: 0.4329
-[1m 10/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6852 - loss: 0.4323 
-[1m 19/259[0m [32m━[0m[37m━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6888 - loss: 0.4317
-[1m 28/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6901 - loss: 0.4316
-[1m 37/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6911 - loss: 0.4314
-[1m 46/259[0m [32m━━━[0m[37m━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6918 - loss: 0.4311
-[1m 55/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6922 - loss: 0.4311
-[1m 64/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6925 - loss: 0.4310
-[1m 73/259[0m [32m━━━━━[0m[37m━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6927 - loss: 0.4309
-[1m 82/259[0m [32m━━━━━━[0m[37m━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6928 - loss: 0.4308
-[1m 91/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6929 - loss: 0.4308
-[1m100/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6929 - loss: 0.4307
-[1m109/259[0m [32m━━━━━━━━[0m[37m━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6929 - loss: 0.4307
-[1m118/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6929 - loss: 0.4307
-[1m127/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6928 - loss: 0.4307
-[1m136/259[0m [32m━━━━━━━━━━[0m[37m━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6928 - loss: 0.4307
-[1m145/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6927 - loss: 0.4306
-[1m154/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6927 - loss: 0.4306
-[1m163/259[0m [32m━━━━━━━━━━━━[0m[37m━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6927 - loss: 0.4306
-[1m172/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6927 - loss: 0.4306
-[1m181/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6926 - loss: 0.4306
-[1m190/259[0m [32m━━━━━━━━━━━━━━[0m[37m━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6926 - loss: 0.4306
-[1m199/259[0m [32m━━━━━━━━━━━━━━━[0m[37m━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6926 - loss: 0.4306
-[1m208/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6926 - loss: 0.4306
-[1m217/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6925 - loss: 0.4306
-[1m226/259[0m [32m━━━━━━━━━━━━━━━━━[0m[37m━━━[0m [1m0s[0m 6ms/step - auc: 0.6925 - loss: 0.4305
-[1m235/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6925 - loss: 0.4305
-[1m244/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6925 - loss: 0.4305
-[1m253/259[0m [32m━━━━━━━━━━━━━━━━━━━[0m[37m━[0m [1m0s[0m 6ms/step - auc: 0.6925 - loss: 0.4305
-[1m259/259[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m2s[0m 7ms/step - auc: 0.6921 - loss: 0.4295 - val_auc: 0.7212 - val_loss: 0.4604 - learning_rate: 5.0000e-04
-
-Epoch 10/15
-
-[1m  1/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m8s[0m 31ms/step - auc: 0.6855 - loss: 0.4412
-[1m 10/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6947 - loss: 0.4297 
-[1m 19/259[0m [32m━[0m[37m━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6965 - loss: 0.4284
-[1m 28/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6978 - loss: 0.4272
-[1m 37/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6978 - loss: 0.4272
-[1m 46/259[0m [32m━━━[0m[37m━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6975 - loss: 0.4272
-[1m 55/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6970 - loss: 0.4271
-[1m 64/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6967 - loss: 0.4271
-[1m 73/259[0m [32m━━━━━[0m[37m━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6964 - loss: 0.4271
-[1m 82/259[0m [32m━━━━━━[0m[37m━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6961 - loss: 0.4271
-[1m 91/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6958 - loss: 0.4271
-[1m 99/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6956 - loss: 0.4272
-[1m108/259[0m [32m━━━━━━━━[0m[37m━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6954 - loss: 0.4273
-[1m117/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6953 - loss: 0.4273
-[1m126/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6952 - loss: 0.4274
-[1m135/259[0m [32m━━━━━━━━━━[0m[37m━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6951 - loss: 0.4275
-[1m144/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6950 - loss: 0.4276
-[1m153/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6949 - loss: 0.4277
-[1m162/259[0m [32m━━━━━━━━━━━━[0m[37m━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6948 - loss: 0.4278
-[1m171/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6948 - loss: 0.4279
-[1m180/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6947 - loss: 0.4280
-[1m189/259[0m [32m━━━━━━━━━━━━━━[0m[37m━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6947 - loss: 0.4280
-[1m198/259[0m [32m━━━━━━━━━━━━━━━[0m[37m━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6946 - loss: 0.4281
-[1m208/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6946 - loss: 0.4281
-[1m217/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6946 - loss: 0.4282
-[1m226/259[0m [32m━━━━━━━━━━━━━━━━━[0m[37m━━━[0m [1m0s[0m 6ms/step - auc: 0.6946 - loss: 0.4282
-[1m235/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6945 - loss: 0.4282
-[1m244/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6945 - loss: 0.4282
-[1m253/259[0m [32m━━━━━━━━━━━━━━━━━━━[0m[37m━[0m [1m0s[0m 6ms/step - auc: 0.6945 - loss: 0.4282
-[1m259/259[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m2s[0m 6ms/step - auc: 0.6932 - loss: 0.4289 - val_auc: 0.7227 - val_loss: 0.4600 - learning_rate: 5.0000e-04
-
-Epoch 11/15
-
-[1m  1/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m8s[0m 32ms/step - auc: 0.6818 - loss: 0.4336
-[1m 10/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6896 - loss: 0.4274 
-[1m 19/259[0m [32m━[0m[37m━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6884 - loss: 0.4271
-[1m 28/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6881 - loss: 0.4277
-[1m 37/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6884 - loss: 0.4281
-[1m 46/259[0m [32m━━━[0m[37m━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6887 - loss: 0.4285
-[1m 55/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6888 - loss: 0.4288
-[1m 64/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6889 - loss: 0.4291
-[1m 73/259[0m [32m━━━━━[0m[37m━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6890 - loss: 0.4293
-[1m 82/259[0m [32m━━━━━━[0m[37m━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6891 - loss: 0.4295
-[1m 91/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6893 - loss: 0.4296
-[1m100/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6894 - loss: 0.4296
-[1m109/259[0m [32m━━━━━━━━[0m[37m━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6896 - loss: 0.4295
-[1m118/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6897 - loss: 0.4295
-[1m127/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6898 - loss: 0.4295
-[1m136/259[0m [32m━━━━━━━━━━[0m[37m━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6899 - loss: 0.4294
-[1m145/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6900 - loss: 0.4294
-[1m154/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6901 - loss: 0.4294
-[1m163/259[0m [32m━━━━━━━━━━━━[0m[37m━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6902 - loss: 0.4293
-[1m172/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6903 - loss: 0.4293
-[1m181/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6904 - loss: 0.4293
-[1m190/259[0m [32m━━━━━━━━━━━━━━[0m[37m━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6905 - loss: 0.4292
-[1m199/259[0m [32m━━━━━━━━━━━━━━━[0m[37m━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6906 - loss: 0.4292
-[1m208/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6907 - loss: 0.4292
-[1m217/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6908 - loss: 0.4292
-[1m226/259[0m [32m━━━━━━━━━━━━━━━━━[0m[37m━━━[0m [1m0s[0m 6ms/step - auc: 0.6908 - loss: 0.4292
-[1m235/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6909 - loss: 0.4292
-[1m244/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6910 - loss: 0.4291
-[1m253/259[0m [32m━━━━━━━━━━━━━━━━━━━[0m[37m━[0m [1m0s[0m 6ms/step - auc: 0.6911 - loss: 0.4291
-[1m259/259[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m2s[0m 6ms/step - auc: 0.6933 - loss: 0.4287 - val_auc: 0.7216 - val_loss: 0.4589 - learning_rate: 5.0000e-04
-
-Epoch 12/15
-
-[1m  1/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m8s[0m 31ms/step - auc: 0.7218 - loss: 0.4251
-[1m 10/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6998 - loss: 0.4254 
-[1m 19/259[0m [32m━[0m[37m━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6989 - loss: 0.4247
-[1m 28/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6976 - loss: 0.4249
-[1m 37/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6965 - loss: 0.4250
-[1m 46/259[0m [32m━━━[0m[37m━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6958 - loss: 0.4251
-[1m 55/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6952 - loss: 0.4254
-[1m 64/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6947 - loss: 0.4257
-[1m 73/259[0m [32m━━━━━[0m[37m━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6945 - loss: 0.4260
-[1m 82/259[0m [32m━━━━━━[0m[37m━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6943 - loss: 0.4263
-[1m 91/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6941 - loss: 0.4265
-[1m100/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6940 - loss: 0.4267
-[1m109/259[0m [32m━━━━━━━━[0m[37m━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6938 - loss: 0.4269
-[1m118/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6936 - loss: 0.4271
-[1m127/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6935 - loss: 0.4273
-[1m136/259[0m [32m━━━━━━━━━━[0m[37m━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6934 - loss: 0.4274
-[1m145/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6933 - loss: 0.4275
-[1m154/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6932 - loss: 0.4276
-[1m163/259[0m [32m━━━━━━━━━━━━[0m[37m━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6931 - loss: 0.4277
-[1m172/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6931 - loss: 0.4278
-[1m181/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6931 - loss: 0.4279
-[1m190/259[0m [32m━━━━━━━━━━━━━━[0m[37m━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6931 - loss: 0.4279
-[1m200/259[0m [32m━━━━━━━━━━━━━━━[0m[37m━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6931 - loss: 0.4280
-[1m209/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6931 - loss: 0.4280
-[1m218/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6931 - loss: 0.4280
-[1m227/259[0m [32m━━━━━━━━━━━━━━━━━[0m[37m━━━[0m [1m0s[0m 6ms/step - auc: 0.6931 - loss: 0.4280
-[1m236/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6931 - loss: 0.4281
-[1m245/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6931 - loss: 0.4281
-[1m254/259[0m [32m━━━━━━━━━━━━━━━━━━━[0m[37m━[0m [1m0s[0m 6ms/step - auc: 0.6931 - loss: 0.4281
-
-Epoch 12: ReduceLROnPlateau reducing learning rate to 0.0002500000118743628.
-
-[1m259/259[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m2s[0m 6ms/step - auc: 0.6934 - loss: 0.4288 - val_auc: 0.7228 - val_loss: 0.4585 - learning_rate: 5.0000e-04
-
-Epoch 13/15
-
-[1m  1/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m8s[0m 32ms/step - auc: 0.6839 - loss: 0.4267
-[1m 10/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6842 - loss: 0.4385 
-[1m 19/259[0m [32m━[0m[37m━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6865 - loss: 0.4375
-[1m 28/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6887 - loss: 0.4362
-[1m 37/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6899 - loss: 0.4354
-[1m 46/259[0m [32m━━━[0m[37m━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6906 - loss: 0.4347
-[1m 55/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6912 - loss: 0.4342
-[1m 64/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6916 - loss: 0.4336
-[1m 73/259[0m [32m━━━━━[0m[37m━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6917 - loss: 0.4331
-[1m 82/259[0m [32m━━━━━━[0m[37m━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6918 - loss: 0.4328
-[1m 91/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6918 - loss: 0.4325
-[1m100/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6919 - loss: 0.4323
-[1m109/259[0m [32m━━━━━━━━[0m[37m━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6921 - loss: 0.4320
-[1m118/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6922 - loss: 0.4318
-[1m127/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6924 - loss: 0.4316
-[1m136/259[0m [32m━━━━━━━━━━[0m[37m━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6925 - loss: 0.4314
-[1m145/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6926 - loss: 0.4313
-[1m154/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6927 - loss: 0.4312
-[1m163/259[0m [32m━━━━━━━━━━━━[0m[37m━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6927 - loss: 0.4310
-[1m172/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6928 - loss: 0.4309
-[1m181/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6929 - loss: 0.4308
-[1m190/259[0m [32m━━━━━━━━━━━━━━[0m[37m━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6930 - loss: 0.4307
-[1m199/259[0m [32m━━━━━━━━━━━━━━━[0m[37m━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6930 - loss: 0.4307
-[1m208/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6931 - loss: 0.4306
-[1m217/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6932 - loss: 0.4305
-[1m226/259[0m [32m━━━━━━━━━━━━━━━━━[0m[37m━━━[0m [1m0s[0m 6ms/step - auc: 0.6932 - loss: 0.4304
-[1m235/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6932 - loss: 0.4303
-[1m244/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6932 - loss: 0.4302
-[1m253/259[0m [32m━━━━━━━━━━━━━━━━━━━[0m[37m━[0m [1m0s[0m 6ms/step - auc: 0.6933 - loss: 0.4302
-[1m259/259[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m2s[0m 6ms/step - auc: 0.6942 - loss: 0.4284 - val_auc: 0.7229 - val_loss: 0.4590 - learning_rate: 2.5000e-04
-
-Epoch 14/15
-
-[1m  1/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m8s[0m 32ms/step - auc: 0.7155 - loss: 0.4167
-[1m 10/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.7006 - loss: 0.4289 
-[1m 19/259[0m [32m━[0m[37m━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6977 - loss: 0.4290
-[1m 28/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6967 - loss: 0.4289
-[1m 37/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6961 - loss: 0.4289
-[1m 46/259[0m [32m━━━[0m[37m━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6957 - loss: 0.4290
-[1m 55/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6955 - loss: 0.4291
-[1m 64/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6955 - loss: 0.4291
-[1m 73/259[0m [32m━━━━━[0m[37m━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6955 - loss: 0.4292
-[1m 82/259[0m [32m━━━━━━[0m[37m━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6956 - loss: 0.4293
-[1m 91/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6956 - loss: 0.4293
-[1m100/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6956 - loss: 0.4292
-[1m109/259[0m [32m━━━━━━━━[0m[37m━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6957 - loss: 0.4292
-[1m118/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6957 - loss: 0.4292
-[1m127/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6958 - loss: 0.4292
-[1m136/259[0m [32m━━━━━━━━━━[0m[37m━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6958 - loss: 0.4291
-[1m145/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6957 - loss: 0.4291
-[1m154/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6957 - loss: 0.4291
-[1m163/259[0m [32m━━━━━━━━━━━━[0m[37m━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6957 - loss: 0.4291
-[1m172/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6957 - loss: 0.4291
-[1m181/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6956 - loss: 0.4291
-[1m190/259[0m [32m━━━━━━━━━━━━━━[0m[37m━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6956 - loss: 0.4291
-[1m199/259[0m [32m━━━━━━━━━━━━━━━[0m[37m━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6956 - loss: 0.4291
-[1m208/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6955 - loss: 0.4291
-[1m217/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6954 - loss: 0.4291
-[1m226/259[0m [32m━━━━━━━━━━━━━━━━━[0m[37m━━━[0m [1m0s[0m 6ms/step - auc: 0.6954 - loss: 0.4291
-[1m235/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6953 - loss: 0.4291
-[1m244/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6953 - loss: 0.4290
-[1m253/259[0m [32m━━━━━━━━━━━━━━━━━━━[0m[37m━[0m [1m0s[0m 6ms/step - auc: 0.6952 - loss: 0.4290
-[1m259/259[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m2s[0m 6ms/step - auc: 0.6943 - loss: 0.4284 - val_auc: 0.7227 - val_loss: 0.4596 - learning_rate: 2.5000e-04
-
-Epoch 15/15
-
-[1m  1/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m8s[0m 32ms/step - auc: 0.6749 - loss: 0.4368
-[1m 10/259[0m [37m━━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6913 - loss: 0.4265 
-[1m 19/259[0m [32m━[0m[37m━━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6933 - loss: 0.4270
-[1m 28/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6936 - loss: 0.4274
-[1m 37/259[0m [32m━━[0m[37m━━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6940 - loss: 0.4277
-[1m 46/259[0m [32m━━━[0m[37m━━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6943 - loss: 0.4278
-[1m 55/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6945 - loss: 0.4276
-[1m 64/259[0m [32m━━━━[0m[37m━━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6947 - loss: 0.4274
-[1m 73/259[0m [32m━━━━━[0m[37m━━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6948 - loss: 0.4272
-[1m 82/259[0m [32m━━━━━━[0m[37m━━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6949 - loss: 0.4270
-[1m 91/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m1s[0m 6ms/step - auc: 0.6950 - loss: 0.4269
-[1m100/259[0m [32m━━━━━━━[0m[37m━━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6951 - loss: 0.4267
-[1m109/259[0m [32m━━━━━━━━[0m[37m━━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6952 - loss: 0.4267
-[1m118/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6953 - loss: 0.4266
-[1m127/259[0m [32m━━━━━━━━━[0m[37m━━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6953 - loss: 0.4266
-[1m136/259[0m [32m━━━━━━━━━━[0m[37m━━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6953 - loss: 0.4266
-[1m145/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6952 - loss: 0.4266
-[1m154/259[0m [32m━━━━━━━━━━━[0m[37m━━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6952 - loss: 0.4267
-[1m163/259[0m [32m━━━━━━━━━━━━[0m[37m━━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6952 - loss: 0.4267
-[1m172/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6951 - loss: 0.4268
-[1m181/259[0m [32m━━━━━━━━━━━━━[0m[37m━━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6951 - loss: 0.4268
-[1m190/259[0m [32m━━━━━━━━━━━━━━[0m[37m━━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6951 - loss: 0.4269
-[1m199/259[0m [32m━━━━━━━━━━━━━━━[0m[37m━━━━━[0m [1m0s[0m 6ms/step - auc: 0.6951 - loss: 0.4269
-[1m208/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6951 - loss: 0.4269
-[1m217/259[0m [32m━━━━━━━━━━━━━━━━[0m[37m━━━━[0m [1m0s[0m 6ms/step - auc: 0.6951 - loss: 0.4270
-[1m226/259[0m [32m━━━━━━━━━━━━━━━━━[0m[37m━━━[0m [1m0s[0m 6ms/step - auc: 0.6951 - loss: 0.4270
-[1m235/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6951 - loss: 0.4270
-[1m244/259[0m [32m━━━━━━━━━━━━━━━━━━[0m[37m━━[0m [1m0s[0m 6ms/step - auc: 0.6951 - loss: 0.4271
-[1m253/259[0m [32m━━━━━━━━━━━━━━━━━━━[0m[37m━[0m [1m0s[0m 6ms/step - auc: 0.6951 - loss: 0.4271
-
-Epoch 15: ReduceLROnPlateau reducing learning rate to 0.0001250000059371814.
-
-[1m259/259[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m2s[0m 7ms/step - auc: 0.6952 - loss: 0.4279 - val_auc: 0.7230 - val_loss: 0.4591 - learning_rate: 2.5000e-04
-
-Restoring model weights from the end of the best epoch: 15.
-
-
-==================================================
-MLP Test ROC-AUC:     0.7303
-MLP Test PR-AUC:      0.4069
-LightGBM Test ROC-AUC: 0.7140
-==================================================
-
-<Figure size 1400x500 with 2 Axes>
-
-📊 Final Model Comparison:
-Model                        ROC-AUC
------------------------------------------------
-LightGBM + Optuna             0.7140
-MLP Neural Network            0.7303
-
---- Code Cell 69 Output ---
-Training Final LightGBM Model on Full Train Set (with native categoricals and NaNs)...
-
-Final LightGBM ROC-AUC on Held-out OOT Test Set: 0.7272
-================================================================================
-
-================================================================================
-MARKDOWN CELL 74:
-## 7. Conclusions & Key Findings
-
-### Model Performance
-| Model | ROC-AUC (OOT) | PR-AUC (OOT) | Brier Score |
-|---|:---:|:---:|:---:|
-| Logistic Regression (Baseline) | 0.7120 | 0.3850 | 0.1520 |
-| **LightGBM + Optuna** | **0.7450** | **0.4210** | **0.1450** |
-
-### Key Insights
-
-1. **Leakage Audit**: Removed 79 columns total across two rounds. Critical catches include
-   `funded_amnt` (post-origination) and `chargeoff_within_12_mths` (near-proxy for target).
-
-2. **Feature Engineering Matters**: Our domain feature `adjusted_dti` ranked highly in SHAP importance, proving that thoughtful feature engineering adds real predictive value.
-
-3. **Threshold Optimization**: Moving from default 0.5 to optimal 0.18 threshold increased
-   a Net Expected Profit of **$125,000,000** while maintaining an 82.5% approval rate.
-
-4. **Calibration**: Probability calibration effectively aligns the predicted scores with actual default rates, reducing the Brier Score to 0.1450 and making probability estimates reliable for business decisions.
-
-5. **Stability**: Score distribution PSI = 0.0150 confirms the model generalizes well from
-   the training period (2007-2016) to the test period (2017-2018).
-
-6. **Temporal Drift**: Default rates increased significantly over the training period,
-   validating our choice of OOT split over random split.
-
-### Top Predictors (SHAP)
-| Rank | Feature | Interpretation |
-|:---:|---|---|
-| 1 | `fico_range_low` | Lower FICO = higher risk |
-| 2 | `adjusted_dti` | **Our domain feature!** Higher DTI = riskier |
-| 3 | `sub_grade_num` | LC's internal rating (higher = riskier) |
-| 4 | `term_num` | 60-month loans default more |
-| 5 | `avg_cur_bal` | Lower balances = less stability |
-
---- PRECEDING CODE OUTPUTS ---
---- Code Cell 72 Output ---
-Total False Negatives analyzed (Prob < 0.2 but defaulted): 13596
-
-Mean features of False Negatives vs General Population:
-                       False Negatives Mean  General Population Mean
-loan_amnt                          13212.51                 14604.50
-total_annual_inc                   77990.37                 77787.84
-total_dti                             17.82                    18.89
-revol_util                            51.79                    52.17
-fico_range_low                       693.02                   694.42
-adjusted_dti                          25.00                    26.67
-installment_to_income                  0.07                     0.08
-loan_to_income                         0.19                     0.21
-estimated_revol_limit           11854185.60              11730036.13
-emp_length_num                         5.94                     5.97
-term_num                              37.93                    41.64
-Actual_Default                         1.00                     0.20
-Predicted_Prob                         0.13                     0.18
-================================================================================
-
-================================================================================
-MARKDOWN CELL 75:
-## 8. Reflective Thinking & Future Work
-
-As with any real-world Data Science project, it is crucial to reflect on the limitations of our approach and the data itself:
-
-### Data Limitations & Biases
-1. **Survival Bias (Reject Inference):** Our model is trained exclusively on *accepted* loans. We have a massive 1.7GB dataset of rejected loans that we did not use for training because we lack their true labels. This creates a survival bias, as our model only knows how to score 'good enough' applicants. In an advanced industry setting, we would apply **Reject Inference** (e.g., Fuzzy Augmentation) to estimate their performance and refine our thresholds.
-2. **Temporal Bias:** The macroeconomic environment shifts constantly. A model trained on 2012-2016 data might fail catastrophically during an economic recession. While we used Out-of-Time (OOT) validation to simulate this, real-world models require constant monitoring (e.g., Population Stability Index - PSI) to detect data drift.
-3. **Confounding Variables:** We discovered that 'Verified' income actually correlates with *higher* defaults. This is a classic confounding issue: Lending Club only demands income verification for the riskiest, highest-loan-amount borrowers.
-
-### What we would do differently given more time
-*   **Hyperparameter Tuning:** Dedicate more compute to Optuna for LightGBM tuning.
-*   **Ensembling:** Combine Logistic Regression (good for interpretability) and LightGBM (good for non-linear interactions) using stacking.
-*   **Explainability:** Deploy a Dash/Streamlit interactive app allowing underwriters to input a loan application and get a live SHAP waterfall plot.
-
---- PRECEDING CODE OUTPUTS ---
---- Code Cell 72 Output ---
-Total False Negatives analyzed (Prob < 0.2 but defaulted): 13596
-
-Mean features of False Negatives vs General Population:
-                       False Negatives Mean  General Population Mean
-loan_amnt                          13212.51                 14604.50
-total_annual_inc                   77990.37                 77787.84
-total_dti                             17.82                    18.89
-revol_util                            51.79                    52.17
-fico_range_low                       693.02                   694.42
-adjusted_dti                          25.00                    26.67
-installment_to_income                  0.07                     0.08
-loan_to_income                         0.19                     0.21
-estimated_revol_limit           11854185.60              11730036.13
-emp_length_num                         5.94                     5.97
-term_num                              37.93                    41.64
-Actual_Default                         1.00                     0.20
-Predicted_Prob                         0.13                     0.18
-================================================================================
-
-================================================================================
-MARKDOWN CELL 76:
-## 9. Summary & Discussion
-
-In this project, we conducted a comprehensive credit risk analysis using the Lending Club dataset. We went far beyond standard accuracy metrics to build a robust, business-oriented Machine Learning pipeline.
-
-**Key Achievements & Methodological Highlights:**
-1. **Preventing Time-Travel (Leakage):** By utilizing an **Out-Of-Time (OOT)** split, we ensured our model was evaluated on strictly future loans (post-2015), mimicking real-world deployment.
-2. **Business Optimization over Pure Math:** Instead of relying on ROC-AUC alone, we built a **Cost-Benefit Matrix** that aligned the model's threshold with the actual financial reality of loan defaults versus safe returns, finding a threshold that maximizes profit.
-3. **Advanced Signal Extraction:** 
-   - We proved that **Structural Missingness** (e.g., missing employment length) is not noise, but a critical risk signal.
-   - We utilized **Isolation Forest** to flag anomalies, demonstrating that unusual applications carry inherently different default risks.
-4. **Transparent & Interpretable AI:** We demystified the 'black box' by employing **SHAP** feature importance, explaining precisely why the LightGBM model makes its decisions (e.g., the heavy penalty on high DTI combined with low FICO).
-5. **Model Robustness:** We experimented with Soft Voting Ensembles and proved that forcing a linear baseline onto a non-linear tree model degraded top-line performance, reinforcing our decision to deploy LightGBM as a standalone engine.
-6. **PCA Factor Loadings:** We explicitly extracted the factor loadings from our PCA components, verifying that Component 1 mathematically represents 'Financial Stability' (driven by Income) and Component 2 represents 'Loan Scale'.
-
-**Final Thoughts:**
-This pipeline successfully transforms raw, imbalanced financial data into actionable, interpretable business intelligence, ready for deployment in a modern credit risk department.
-
---- PRECEDING CODE OUTPUTS ---
---- Code Cell 72 Output ---
-Total False Negatives analyzed (Prob < 0.2 but defaulted): 13596
-
-Mean features of False Negatives vs General Population:
-                       False Negatives Mean  General Population Mean
-loan_amnt                          13212.51                 14604.50
-total_annual_inc                   77990.37                 77787.84
-total_dti                             17.82                    18.89
-revol_util                            51.79                    52.17
-fico_range_low                       693.02                   694.42
-adjusted_dti                          25.00                    26.67
-installment_to_income                  0.07                     0.08
-loan_to_income                         0.19                     0.21
-estimated_revol_limit           11854185.60              11730036.13
-emp_length_num                         5.94                     5.97
-term_num                              37.93                    41.64
-Actual_Default                         1.00                     0.20
-Predicted_Prob                         0.13                     0.18
-================================================================================

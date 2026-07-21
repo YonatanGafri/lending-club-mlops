@@ -1,1 +1,0 @@
-{"logistic_regression": {"test_roc_auc": 0.712, "test_pr_auc": 0.385, "brier_score": 0.152}, "lightgbm_optuna": {"test_roc_auc": 0.745, "test_pr_auc": 0.421, "brier_score": 0.145}, "threshold_optimization": {"optimal_threshold_profit": 0.18, "net_profit": 125000000, "approval_rate": 82.5}, "psi": {"score_distribution_psi": 0.015}}
