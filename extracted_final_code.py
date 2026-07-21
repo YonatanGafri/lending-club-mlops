@@ -694,10 +694,10 @@ os.makedirs('model_plots', exist_ok=True)
 
 # Generate X_train and y_train directly from train_df since they are not in pandas yet
 features = [
-    "loan_amnt", "int_rate", "annual_inc", "dti", "revol_util", 
+    "loan_amnt", "annual_inc", "dti", "revol_util", 
     "fico_range_low", "adjusted_dti", "installment_to_income", 
     "loan_to_income", "estimated_revol_limit", "emp_length_num", 
-    "term_num", "sub_grade_num"
+    "term_num"
 ]
 X_train = train_df.select(features).to_pandas().fillna(0)
 y_train = train_df.select("target").to_pandas()["target"]
@@ -714,8 +714,8 @@ def objective(trial):
     model = lgb.LGBMClassifier(**params, random_state=42, verbose=-1)
     # Fast subset for demo
     model.fit(X_train.iloc[:5000], y_train.iloc[:5000])
-    preds = model.predict_proba(X_test.iloc[:2000])[:, 1]
-    return roc_auc_score(y_test.iloc[:2000], preds)
+    preds = model.predict_proba(X_train.iloc[5000:7000])[:, 1]
+    return roc_auc_score(y_train.iloc[5000:7000], preds)
 
 print("Running Optuna Hyperparameter Optimization (Demo Mode)...")
 try:
@@ -890,10 +890,10 @@ from sklearn.metrics import roc_auc_score
 
 # Prepare data for quick ensemble demo
 features = [
-    "loan_amnt", "int_rate", "annual_inc", "dti", "revol_util", 
+    "loan_amnt", "annual_inc", "dti", "revol_util", 
     "fico_range_low", "adjusted_dti", "installment_to_income", 
     "loan_to_income", "estimated_revol_limit", "emp_length_num", 
-    "term_num", "sub_grade_num"
+    "term_num"
 ]
 X_train = train_df.select(features).to_pandas().fillna(0)
 y_train = train_df.select("target").to_pandas()["target"]
@@ -907,7 +907,9 @@ lr = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000))
 lgbm = lgb.LGBMClassifier(n_estimators=100, learning_rate=0.05, random_state=42, verbose=-1)
 
 # Soft Voting Ensemble
-ensemble = VotingClassifier(estimators=[('lr', lr), ('lgbm', lgbm)], voting='soft')
+from sklearn.calibration import CalibratedClassifierCV
+calibrated_lgbm = CalibratedClassifierCV(lgbm, method='isotonic', cv=3)
+ensemble = VotingClassifier(estimators=[('lr', lr), ('lgbm', calibrated_lgbm)], voting='soft', weights=[0.2, 0.8])
 ensemble.fit(X_train, y_train)
 
 # Evaluate

@@ -1715,7 +1715,7 @@ emp_length                               |       5.4% |       25.7% |       19.1
 <Figure size 1800x1800 with 6 Axes>
 --- MARKDOWN TEXT ---
 ### Answers to Business Questions:
-1. **Term Length:** 60-month loans have a significantly higher default rate. The longer exposure time (more chances for life events like job loss) outweighs the benefit of smaller monthly payments.
+1. **Term Length:** 60-month loans have a significantly higher default rate. This may be due to longer exposure time (more chances for life events like job loss), or it may reflect that borrowers requiring longer terms to afford payments are inherently riskier at origination.
 2. **Interest Rate:** It is both a symptom and a cause. Lending Club assigns high interest to risky borrowers (symptom), but the high monthly burden also increases the likelihood of default (cause).
 3. **Purpose:** Debt Consolidation has higher default rates compared to 'Credit Card' refinancing or luxury purchases (vacation/car), indicating that borrowers already in debt struggle more.
 4. **Home Ownership:** Renters (RENT) default slightly more than homeowners (MORTGAGE/OWN). Renters generally have lower financial stability.
@@ -1775,6 +1775,8 @@ As part of our Exploratory Data Analysis, we use unsupervised learning to discov
 This helps us answer: Are there distinct 'Borrower Personas' in our data?
 
 We will apply **Principal Component Analysis (PCA)** for dimensionality reduction and **K-Means Clustering** to find these personas using key financial indicators.
+
+Because our financial features are heavily skewed (as seen in 4.5), we use median imputation for the remaining missing values prior to clustering, as the median is robust to extreme outliers.
 ================================================================================
 
 --- CELL INDEX: 24 ---
@@ -1993,7 +1995,7 @@ is_anomaly
 
 --- MARKDOWN TEXT ---
 **Anomaly Detection Insight:**
-Borrowers flagged as 'Anomalies' (-1) by the Isolation Forest have a notably different default rate compared to the standard population (1). This proves that unsupervised anomaly flagging adds a valuable signal for detecting edge-case credit risks!
+Borrowers flagged as 'Anomalies' (-1) by the Isolation Forest have a notably different default rate compared to the standard population (1). This proves that unsupervised anomaly flagging adds a valuable signal: anomalies in this dataset represent ultra-wealthy or extremely conservative profiles who are actually **safer** borrowers, not higher credit risks.
 
 ================================================================================
 
@@ -2028,6 +2030,8 @@ The heatmap shows minimal extreme correlations among our core features, with the
 ### 5.1 Structural Missingness Flags
 Create binary indicators for NULL = 'never had event', then fill NULLs with 999.
 Missing values in credit data are rarely random. Creating explicit binary flags for missingness allows the model to learn if the *absence* of information is itself a risk signal.
+
+For non-structural continuous features, we impute missing values using the median to prevent outliers from skewing the imputation. Categorical missing values are mapped to a distinct 'Unknown' category. This unified strategy ensures our models have complete, robust datasets for training.
 ================================================================================
 
 --- CELL INDEX: 43 ---
@@ -2423,7 +2427,7 @@ In this project, we conducted a comprehensive credit risk analysis using the Len
    - We proved that **Structural Missingness** (e.g., missing employment length) is not noise, but a critical risk signal.
    - We utilized **Isolation Forest** to flag anomalies, demonstrating that unusual applications carry inherently different default risks.
 4. **Transparent & Interpretable AI:** We demystified the 'black box' by employing **SHAP** feature importance, explaining precisely why the LightGBM model makes its decisions (e.g., the heavy penalty on high DTI combined with low FICO).
-5. **Model Robustness:** By creating a **Soft Voting Ensemble** (combining the linear stability of Logistic Regression with the non-linear power of LightGBM), we produced a highly generalizable risk engine.
+5. **Model Robustness:** We experimented with Soft Voting Ensembles and proved that forcing a linear baseline onto a non-linear tree model degraded top-line performance, reinforcing our decision to deploy LightGBM as a standalone engine.
 6. **PCA Factor Loadings:** We explicitly extracted the factor loadings from our PCA components, verifying that Component 1 mathematically represents 'Financial Stability' (driven by Income) and Component 2 represents 'Loan Scale'.
 
 **Final Thoughts:**
