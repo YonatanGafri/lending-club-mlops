@@ -375,7 +375,7 @@ from IPython.display import display
 
 print("Preparing data for Unsupervised Learning...")
 # Select a subset of continuous financial features
-unsup_features = ['loan_amnt', 'int_rate', 'total_annual_inc', 'total_dti', 'revol_util', 'revol_bal', "mths_since_last_delinq_never", "mths_since_last_record_never", "mths_since_last_major_derog_never", "mths_since_recent_bc_dlq_never", "mths_since_recent_revol_delinq_never", "mths_since_recent_inq_never"]
+unsup_features = ['loan_amnt', 'int_rate', 'total_annual_inc', 'total_dti', 'revol_util', 'revol_bal']
 
 # Sample the data to make unsupervised learning faster (100k rows)
 df_unsup = df.select(unsup_features + ['target']).sample(n=100000, seed=42)
@@ -487,7 +487,7 @@ import matplotlib.pyplot as plt
 
 # We already have `pca` and `X_scaled` from previous cells.
 # We also need the feature names used for PCA.
-features = ['loan_amnt', 'int_rate', 'total_annual_inc', 'total_dti', 'revol_util', 'revol_bal', "mths_since_last_delinq_never", "mths_since_last_record_never", "mths_since_last_major_derog_never", "mths_since_recent_bc_dlq_never", "mths_since_recent_revol_delinq_never", "mths_since_recent_inq_never"]
+features = ['loan_amnt', 'int_rate', 'total_annual_inc', 'total_dti', 'revol_util', 'revol_bal']
 
 loadings = pd.DataFrame(
     pca.components_.T,
@@ -525,7 +525,7 @@ print(anomaly_stats)
 # CODE CELL
 # ==========================================
 # 1. Correlation Heatmap
-corr_features = ['loan_amnt', 'int_rate', 'installment', 'total_annual_inc', 'total_dti', 'fico_range_low', 'revol_util', "mths_since_last_delinq_never", "mths_since_last_record_never", "mths_since_last_major_derog_never", "mths_since_recent_bc_dlq_never", "mths_since_recent_revol_delinq_never", "mths_since_recent_inq_never"]
+corr_features = ['loan_amnt', 'int_rate', 'installment', 'total_annual_inc', 'total_dti', 'fico_range_low', 'revol_util']
 corr_matrix = df.select(corr_features).to_pandas().corr()
 
 plt.figure(figsize=(10, 6))
@@ -677,7 +677,7 @@ features = [
     "fico_range_low", "adjusted_dti", "installment_to_income", 
     "loan_to_income", "estimated_revol_limit", "emp_length_num", 
     "term_num", "purpose", "home_ownership", "verification_status"
-, "mths_since_last_delinq_never", "mths_since_last_record_never", "mths_since_last_major_derog_never", "mths_since_recent_bc_dlq_never", "mths_since_recent_revol_delinq_never", "mths_since_recent_inq_never"]
+]
 X_train = train_df.select(features).to_pandas()
 y_train = train_df.select("target").to_pandas()["target"]
 X_test = test_df.select(features).to_pandas()
@@ -728,7 +728,8 @@ for fold, (train_idx, val_idx) in enumerate(tscv.split(X_train)):
     y_fold_train, y_fold_val = y_train.iloc[train_idx], y_train.iloc[val_idx]
     
     # We use some generic params since we might not have `best_params` cleanly available here
-    fold_model = lgb.LGBMClassifier(n_estimators=200, learning_rate=0.05, num_leaves=31, random_state=42, verbose=-1)
+    cv_params = study.best_params if 'study' in globals() else {'n_estimators': 200, 'learning_rate': 0.05, 'num_leaves': 31}
+    fold_model = lgb.LGBMClassifier(**cv_params, random_state=42, verbose=-1)
     fold_model.fit(X_fold_train, y_fold_train, eval_set=[(X_fold_val, y_fold_val)], callbacks=[lgb.early_stopping(30, verbose=False)])
     
     y_pred_proba = fold_model.predict_proba(X_fold_val)[:, 1]
@@ -808,7 +809,13 @@ def build_mlp(input_dim):
 
 # We need to impute NaNs for NN
 cat_cols = ['purpose', 'home_ownership', 'verification_status']
-X_train_nn = X_train.drop(columns=[c for c in cat_cols if c in X_train.columns]).fillna(X_train.drop(columns=[c for c in cat_cols if c in X_train.columns]).median())
+import pandas as pd
+X_train_nn = pd.get_dummies(X_train, columns=[c for c in cat_cols if c in X_train.columns])
+X_test_nn = pd.get_dummies(X_test, columns=[c for c in cat_cols if c in X_test.columns])
+X_train_nn, X_test_nn = X_train_nn.align(X_test_nn, join='left', axis=1, fill_value=0)
+train_median = X_train_nn.median()
+X_train_nn = X_train_nn.fillna(train_median)
+X_test_nn = X_test_nn.fillna(train_median)
 X_test_nn = X_test.drop(columns=[c for c in cat_cols if c in X_test.columns]).fillna(X_train.drop(columns=[c for c in cat_cols if c in X_train.columns]).median())
 
 # Normalization is critical for NN
@@ -883,7 +890,8 @@ import lightgbm as lgb
 
 print("Training Final LightGBM Model on Full Train Set (with native categoricals and NaNs)...")
 # We use robust params.
-final_lgbm = lgb.LGBMClassifier(n_estimators=300, learning_rate=0.05, num_leaves=31, random_state=42, verbose=-1)
+best_params = study.best_params if 'study' in globals() else {'n_estimators': 300, 'learning_rate': 0.05, 'num_leaves': 31}
+final_lgbm = lgb.LGBMClassifier(**best_params, random_state=42, verbose=-1)
 final_lgbm.fit(X_train, y_train)
 
 lgbm_preds = final_lgbm.predict_proba(X_test)[:, 1]

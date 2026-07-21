@@ -1,0 +1,18 @@
+==== Unverified Numbers Audit ====
+
+Cell 9 claims unverified metrics: ['19.5%', '80.5%']
+  -> - **Class Imbalance**: 4.13:1 ratio (80.5% Fully Paid vs 19.5% Charged Off)
+  -> - Baseline accuracy of 80.5% achieved by predicting all loans as 'Fully Paid'
+----------------------------------------
+Cell 13 claims unverified metrics: ['25.7%']
+  -> default at **25.7%** vs 19.1% for those with known values. This is a 6.6pp difference!
+----------------------------------------
+Cell 70 claims unverified metrics: ['0.7450']
+  -> The Soft Voting ensemble achieves an ROC-AUC of 0.6896, which actually *underperforms* the LightGBM model alone (0.7450). This occurs because a simple unweighted average allows the weaker linear model to drag down the strong non-linear tree model. While ensembling adds structural robustness against concept drift, a pure average is sub-optimal here. In production, a Stacking Classifier or a weighted average would be preferred to leverage the strengths of both models without degrading top-line performance.
+----------------------------------------
+Cell 74 claims unverified metrics: ['0.1520', '0.3850', '0.7120', '0.0150', '0.1450', '0.4210']
+  -> | Logistic Regression (Baseline) | 0.7120 | 0.3850 | 0.1520 |
+  -> | **LightGBM + Optuna** | **0.7272** | **0.4210** | **0.1450** |
+  -> 4. **Calibration**: Probability calibration effectively aligns the predicted scores with actual default rates, reducing the Brier Score to 0.1450 and making probability estimates reliable for business decisions.
+  -> 5. **Stability**: Score distribution PSI = 0.0150 confirms the model generalizes well from
+----------------------------------------
