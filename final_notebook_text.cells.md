@@ -102,7 +102,7 @@ All `mths_since_*` columns show the opposite: NULL means 'never had this event' 
 ---
 
 ### Answers to Business Questions:
-1. **Term Length:** 60-month loans have a significantly higher default rate. The longer exposure time (more chances for life events like job loss) outweighs the benefit of smaller monthly payments.
+1. **Term Length:** 60-month loans have a significantly higher default rate. This may be due to longer exposure time (more chances for life events like job loss), or it may reflect that borrowers requiring longer terms to afford payments are inherently riskier at origination.
 2. **Interest Rate:** It is both a symptom and a cause. Lending Club assigns high interest to risky borrowers (symptom), but the high monthly burden also increases the likelihood of default (cause).
 3. **Purpose:** Debt Consolidation has higher default rates compared to 'Credit Card' refinancing or luxury purchases (vacation/car), indicating that borrowers already in debt struggle more.
 4. **Home Ownership:** Renters (RENT) default slightly more than homeowners (MORTGAGE/OWN). Renters generally have lower financial stability.
@@ -135,6 +135,8 @@ As part of our Exploratory Data Analysis, we use unsupervised learning to discov
 This helps us answer: Are there distinct 'Borrower Personas' in our data?
 
 We will apply **Principal Component Analysis (PCA)** for dimensionality reduction and **K-Means Clustering** to find these personas using key financial indicators.
+
+Because our financial features are heavily skewed (as seen in 4.5), we use median imputation for the remaining missing values prior to clustering, as the median is robust to extreme outliers.
 
 ---
 

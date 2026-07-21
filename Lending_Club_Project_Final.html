@@ -9316,7 +9316,7 @@ All <code>mths_since_*</code> columns show the opposite: NULL means 'never had t
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h3 id="Answers-to-Business-Questions:">Answers to Business Questions:<a class="anchor-link" href="#Answers-to-Business-Questions:">¶</a></h3><ol>
-<li><strong>Term Length:</strong> 60-month loans have a significantly higher default rate. The longer exposure time (more chances for life events like job loss) outweighs the benefit of smaller monthly payments.</li>
+<li><strong>Term Length:</strong> 60-month loans have a significantly higher default rate. This may be due to longer exposure time (more chances for life events like job loss), or it may reflect that borrowers requiring longer terms to afford payments are inherently riskier at origination.</li>
 <li><strong>Interest Rate:</strong> It is both a symptom and a cause. Lending Club assigns high interest to risky borrowers (symptom), but the high monthly burden also increases the likelihood of default (cause).</li>
 <li><strong>Purpose:</strong> Debt Consolidation has higher default rates compared to 'Credit Card' refinancing or luxury purchases (vacation/car), indicating that borrowers already in debt struggle more.</li>
 <li><strong>Home Ownership:</strong> Renters (RENT) default slightly more than homeowners (MORTGAGE/OWN). Renters generally have lower financial stability.</li>
@@ -9505,6 +9505,7 @@ The log-scale plots reveal that features like <code>annual_inc</code> and <code>
 <h3 id="4.6-Unsupervised-Learning-(Clustering-&amp;-Dimensionality-Reduction)">4.6 Unsupervised Learning (Clustering &amp; Dimensionality Reduction)<a class="anchor-link" href="#4.6-Unsupervised-Learning-(Clustering-&amp;-Dimensionality-Reduction)">¶</a></h3><p>As part of our Exploratory Data Analysis, we use unsupervised learning to discover hidden structures and natural groupings among borrowers without using the target label (<code>default</code>).
 This helps us answer: Are there distinct 'Borrower Personas' in our data?</p>
 <p>We will apply <strong>Principal Component Analysis (PCA)</strong> for dimensionality reduction and <strong>K-Means Clustering</strong> to find these personas using key financial indicators.</p>
+<p>Because our financial features are heavily skewed (as seen in 4.5), we use median imputation for the remaining missing values prior to clustering, as the median is robust to extreme outliers.</p>
 </div>
 </div>
 </div>
