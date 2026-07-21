@@ -110,6 +110,12 @@ print(f'Removed {n_before - df.shape[0]} exact duplicates')
 df = df.with_columns(
     pl.col('issue_d').str.strptime(pl.Date, format='%b-%Y').alias('issue_date')
 )
+
+# --- Implement Embargo Period to prevent right-censoring ---
+# The dataset ends in 2018Q4. We drop all loans issued in 2016 or later 
+# so that all remaining 36-month loans have had full time to mature.
+df = df.filter(pl.col('issue_date').dt.year() < 2016)
+
 df = df.sort('issue_date')
 
 total_rows = df.shape[0]
