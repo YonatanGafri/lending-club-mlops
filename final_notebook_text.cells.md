@@ -216,7 +216,7 @@ Are there highly anomalous loan applications that behave differently? We use **I
 ---
 
 **Anomaly Detection Insight:**
-Borrowers flagged as 'Anomalies' (-1) by the Isolation Forest have a notably different default rate compared to the standard population (1). This proves that unsupervised anomaly flagging adds a valuable signal for detecting edge-case credit risks!
+Borrowers flagged as 'Anomalies' (-1) by the Isolation Forest have a notably different default rate compared to the standard population (1). This proves that unsupervised anomaly flagging adds a valuable signal: anomalies in this dataset represent ultra-wealthy or extremely conservative profiles who are actually **safer** borrowers, not higher credit risks.
 
 
 ---
@@ -237,6 +237,8 @@ The heatmap shows minimal extreme correlations among our core features, with the
 ### 5.1 Structural Missingness Flags
 Create binary indicators for NULL = 'never had event', then fill NULLs with 999.
 Missing values in credit data are rarely random. Creating explicit binary flags for missingness allows the model to learn if the *absence* of information is itself a risk signal.
+
+For non-structural continuous features, we impute missing values using the median to prevent outliers from skewing the imputation. Categorical missing values are mapped to a distinct 'Unknown' category. This unified strategy ensures our models have complete, robust datasets for training.
 
 ---
 
