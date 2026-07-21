@@ -71,11 +71,6 @@ This is more realistic than random split because it simulates production deploym
 
 ---
 
-### 4.1 Target Distribution & Temporal Drift
-
-
----
-
 **Key Findings:**
 - **Class Imbalance**: 4.13:1 ratio (80.5% Fully Paid vs 19.5% Charged Off)
 - **Temporal Drift**: Default rate **doubled** from 12.6% (2009) to 23.1% (2016)
