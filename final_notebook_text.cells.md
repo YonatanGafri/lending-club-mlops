@@ -444,7 +444,7 @@ In this project, we conducted a comprehensive credit risk analysis using the Len
    - We proved that **Structural Missingness** (e.g., missing employment length) is not noise, but a critical risk signal.
    - We utilized **Isolation Forest** to flag anomalies, demonstrating that unusual applications carry inherently different default risks.
 4. **Transparent & Interpretable AI:** We demystified the 'black box' by employing **SHAP** feature importance, explaining precisely why the LightGBM model makes its decisions (e.g., the heavy penalty on high DTI combined with low FICO).
-5. **Model Robustness:** By creating a **Soft Voting Ensemble** (combining the linear stability of Logistic Regression with the non-linear power of LightGBM), we produced a highly generalizable risk engine.
+5. **Model Robustness:** We experimented with Soft Voting Ensembles and proved that forcing a linear baseline onto a non-linear tree model degraded top-line performance, reinforcing our decision to deploy LightGBM as a standalone engine.
 6. **PCA Factor Loadings:** We explicitly extracted the factor loadings from our PCA components, verifying that Component 1 mathematically represents 'Financial Stability' (driven by Income) and Component 2 represents 'Loan Scale'.
 
 **Final Thoughts:**

@@ -2357,11 +2357,10 @@ No False Negatives found with Prob < 0.2 in this sample.
 
 ### Key Insights
 
-1. **Leakage Audit**: Removed 63 columns total across two rounds. Critical catches include
+1. **Leakage Audit**: Removed 79 columns total across two rounds. Critical catches include
    `funded_amnt` (post-origination) and `chargeoff_within_12_mths` (near-proxy for target).
 
-2. **Feature Engineering Matters**: Our domain feature `adjusted_dti` ranked **#3** in SHAP
-   importance — proving that thoughtful feature engineering adds real predictive value.
+2. **Feature Engineering Matters**: Our domain feature `adjusted_dti` ranked highly in SHAP importance, proving that thoughtful feature engineering adds real predictive value.
 
 3. **Threshold Optimization**: Moving from default 0.5 to optimal 0.18 threshold increased
    Net Expected Profit by **$125,000,000** while maintaining an 82.5% approval rate.
@@ -2371,17 +2370,17 @@ No False Negatives found with Prob < 0.2 in this sample.
 5. **Stability**: Score distribution PSI = 0.0150 confirms the model generalizes well from
    the training period (2007-2016) to the test period (2017-2018).
 
-6. **Temporal Drift**: Default rates doubled from 12.6% to 23.1% over the training period,
+6. **Temporal Drift**: Default rates increased significantly over the training period,
    validating our choice of OOT split over random split.
 
-### Top 5 Predictors (SHAP)
-| Rank | Feature | Mean |SHAP| | Interpretation |
-|:---:|---|:---:|---|
-| 1 | `sub_grade_num` | 0.362 | LC's internal rating (higher = riskier) |
-| 2 | `term_num` | 0.194 | 60-month loans default more |
-| 3 | `adjusted_dti` | 0.172 | **Our domain feature!** Higher DTI = riskier |
-| 4 | `avg_cur_bal` | 0.141 | Lower balances = less stability |
-| 5 | `fico_range_low` | 0.135 | Lower FICO = higher risk |
+### Top Predictors (SHAP)
+| Rank | Feature | Interpretation |
+|:---:|---|---|
+| 1 | `fico_range_low` | Lower FICO = higher risk |
+| 2 | `adjusted_dti` | **Our domain feature!** Higher DTI = riskier |
+| 3 | `sub_grade_num` | LC's internal rating (higher = riskier) |
+| 4 | `term_num` | 60-month loans default more |
+| 5 | `avg_cur_bal` | Lower balances = less stability |
 ================================================================================
 
 --- CELL INDEX: 76 ---

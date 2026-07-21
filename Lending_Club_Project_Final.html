@@ -11391,7 +11391,7 @@ validating our choice of OOT split over random split.</p>
 </ul>
 </li>
 <li><strong>Transparent &amp; Interpretable AI:</strong> We demystified the 'black box' by employing <strong>SHAP</strong> feature importance, explaining precisely why the LightGBM model makes its decisions (e.g., the heavy penalty on high DTI combined with low FICO).</li>
-<li><strong>Model Robustness:</strong> By creating a <strong>Soft Voting Ensemble</strong> (combining the linear stability of Logistic Regression with the non-linear power of LightGBM), we produced a highly generalizable risk engine.</li>
+<li><strong>Model Robustness:</strong> We experimented with Soft Voting Ensembles and proved that forcing a linear baseline onto a non-linear tree model degraded top-line performance, reinforcing our decision to deploy LightGBM as a standalone engine.</li>
 <li><strong>PCA Factor Loadings:</strong> We explicitly extracted the factor loadings from our PCA components, verifying that Component 1 mathematically represents 'Financial Stability' (driven by Income) and Component 2 represents 'Loan Scale'.</li>
 </ol>
 <p><strong>Final Thoughts:</strong>
