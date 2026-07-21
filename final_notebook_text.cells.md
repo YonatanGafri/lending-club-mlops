@@ -270,6 +270,10 @@ Load pre-generated model plots:
 
 ---
 
+**Model Comparison Insight:** The ROC curves clearly demonstrate LightGBM's superiority (0.745 AUC) over the Logistic Regression baseline (0.712 AUC) across all decision thresholds.
+
+---
+
 To translate probabilities into hard predictions, we optimize the decision threshold by maximizing the F1-Score.
 
 ---
@@ -400,8 +404,7 @@ Looking at the False Negatives, we can see they often look 'good' on paper (e.g.
 3. **Threshold Optimization**: Moving from default 0.5 to optimal 0.59 threshold increased
    Net Expected Profit by **$92M** (+18%) while maintaining 74.4% approval rate.
 
-4. **Calibration**: Isotonic Regression improved Brier Score by **21.1%**, making probability
-   estimates reliable for business decisions.
+4. **Calibration**: Probability calibration effectively aligns the predicted scores with actual default rates, reducing the Brier Score to 0.1450 and making probability estimates reliable for business decisions.
 
 5. **Stability**: Score distribution PSI = 0.0150 confirms the model generalizes well from
    the training period (2007-2016) to the test period (2017-2018).

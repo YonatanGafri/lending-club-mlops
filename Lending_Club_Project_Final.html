@@ -10543,6 +10543,17 @@ STABILITY:
 </div>
 </div>
 </div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=24fd02a8">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>Model Comparison Insight:</strong> The ROC curves clearly demonstrate LightGBM's superiority (0.745 AUC) over the Logistic Regression baseline (0.712 AUC) across all decision thresholds.</p>
+</div>
+</div>
+</div>
+</div>
 <div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ad142329">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
@@ -11305,8 +11316,7 @@ importance — proving that thoughtful feature engineering adds real predictive 
 <li><p><strong>Threshold Optimization</strong>: Moving from default 0.5 to optimal 0.59 threshold increased
 Net Expected Profit by <strong>$92M</strong> (+18%) while maintaining 74.4% approval rate.</p>
 </li>
-<li><p><strong>Calibration</strong>: Isotonic Regression improved Brier Score by <strong>21.1%</strong>, making probability
-estimates reliable for business decisions.</p>
+<li><p><strong>Calibration</strong>: Probability calibration effectively aligns the predicted scores with actual default rates, reducing the Brier Score to 0.1450 and making probability estimates reliable for business decisions.</p>
 </li>
 <li><p><strong>Stability</strong>: Score distribution PSI = 0.0150 confirms the model generalizes well from
 the training period (2007-2016) to the test period (2017-2018).</p>
