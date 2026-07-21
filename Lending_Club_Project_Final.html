@@ -11296,11 +11296,10 @@ Looking at the False Negatives, we can see they often look 'good' on paper (e.g.
 </tbody>
 </table>
 <h3 id="Key-Insights">Key Insights<a class="anchor-link" href="#Key-Insights">¶</a></h3><ol>
-<li><p><strong>Leakage Audit</strong>: Removed 63 columns total across two rounds. Critical catches include
+<li><p><strong>Leakage Audit</strong>: Removed 79 columns total across two rounds. Critical catches include
 <code>funded_amnt</code> (post-origination) and <code>chargeoff_within_12_mths</code> (near-proxy for target).</p>
 </li>
-<li><p><strong>Feature Engineering Matters</strong>: Our domain feature <code>adjusted_dti</code> ranked <strong>#3</strong> in SHAP
-importance — proving that thoughtful feature engineering adds real predictive value.</p>
+<li><p><strong>Feature Engineering Matters</strong>: Our domain feature <code>adjusted_dti</code> ranked highly in SHAP importance, proving that thoughtful feature engineering adds real predictive value.</p>
 </li>
 <li><p><strong>Threshold Optimization</strong>: Moving from default 0.5 to optimal 0.18 threshold increased
 Net Expected Profit by <strong>$125,000,000</strong> while maintaining an 82.5% approval rate.</p>
@@ -11310,17 +11309,46 @@ Net Expected Profit by <strong>$125,000,000</strong> while maintaining an 82.5% 
 <li><p><strong>Stability</strong>: Score distribution PSI = 0.0150 confirms the model generalizes well from
 the training period (2007-2016) to the test period (2017-2018).</p>
 </li>
-<li><p><strong>Temporal Drift</strong>: Default rates doubled from 12.6% to 23.1% over the training period,
+<li><p><strong>Temporal Drift</strong>: Default rates increased significantly over the training period,
 validating our choice of OOT split over random split.</p>
 </li>
 </ol>
-<h3 id="Top-5-Predictors-(SHAP)">Top 5 Predictors (SHAP)<a class="anchor-link" href="#Top-5-Predictors-(SHAP)">¶</a></h3><p>| Rank | Feature | Mean |SHAP| | Interpretation |
-|:---:|---|:---:|---|
-| 1 | <code>sub_grade_num</code> | 0.362 | LC's internal rating (higher = riskier) |
-| 2 | <code>term_num</code> | 0.194 | 60-month loans default more |
-| 3 | <code>adjusted_dti</code> | 0.172 | <strong>Our domain feature!</strong> Higher DTI = riskier |
-| 4 | <code>avg_cur_bal</code> | 0.141 | Lower balances = less stability |
-| 5 | <code>fico_range_low</code> | 0.135 | Lower FICO = higher risk |</p>
+<h3 id="Top-Predictors-(SHAP)">Top Predictors (SHAP)<a class="anchor-link" href="#Top-Predictors-(SHAP)">¶</a></h3><table>
+<thead>
+<tr>
+<th style="text-align:center">Rank</th>
+<th>Feature</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">1</td>
+<td><code>fico_range_low</code></td>
+<td>Lower FICO = higher risk</td>
+</tr>
+<tr>
+<td style="text-align:center">2</td>
+<td><code>adjusted_dti</code></td>
+<td><strong>Our domain feature!</strong> Higher DTI = riskier</td>
+</tr>
+<tr>
+<td style="text-align:center">3</td>
+<td><code>sub_grade_num</code></td>
+<td>LC's internal rating (higher = riskier)</td>
+</tr>
+<tr>
+<td style="text-align:center">4</td>
+<td><code>term_num</code></td>
+<td>60-month loans default more</td>
+</tr>
+<tr>
+<td style="text-align:center">5</td>
+<td><code>avg_cur_bal</code></td>
+<td>Lower balances = less stability</td>
+</tr>
+</tbody>
+</table>
 </div>
 </div>
 </div>
