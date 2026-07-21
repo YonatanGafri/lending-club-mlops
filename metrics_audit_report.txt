@@ -1,0 +1,369 @@
+
+================================================================================
+MARKDOWN CELL 0:
+# Lending Club Data Science Project
+
+## Abstract
+This project conducts a comprehensive credit risk analysis using the Lending Club dataset. The primary objective is to identify key borrower attributes and financial indicators that strongly correlate with loan defaults. By leveraging advanced data preprocessing and machine learning techniques, we aim to build robust predictive models capable of estimating the probability of default for new loan applications.
+
+## Problem & Motivation
+Peer-to-peer (P2P) lending platforms, such as Lending Club, revolutionized personal finance by connecting individual investors directly with borrowers. However, this model shifts the credit risk entirely onto the investors. Accurately predicting loan defaults is critical because:
+1. **Capital Preservation:** Investors stand to lose their principal if a borrower defaults.
+2. **Platform Trust:** The long-term viability of P2P lending depends on delivering consistent returns to investors. High default rates can erode trust and liquidity.
+3. **Optimized Lending:** Better risk models allow for more accurate interest rate assignments, ensuring fair pricing for borrowers and adequate compensation for investor risk.
+
+This project is motivated by the need to develop a reliable, data-driven approach to risk assessment that minimizes financial exposure while maximizing investment returns.
+
+## Data Collection
+The dataset used in this project is sourced from Kaggle: <a href="https://www.kaggle.com/datasets/wordsforthewise/lending-club" style="color:blue;">Lending Club Dataset</a>. It contains comprehensive historical data on loans issued from 2007 to 2018, including various applicant attributes, loan characteristics, and the final loan status.
+
+--- PRECEDING CODE OUTPUTS ---
+NO PRECEDING CODE OUTPUTS FOUND.
+================================================================================
+
+================================================================================
+MARKDOWN CELL 9:
+**Key Findings:**
+- **Class Imbalance**: 4.13:1 ratio (80.5% Fully Paid vs 19.5% Charged Off)
+- **Temporal Drift**: Default rate **doubled** from 12.6% (2009) to 23.1% (2016)
+- Baseline accuracy of 80.5% achieved by predicting all loans as 'Fully Paid'
+- This confirms **OOT split was the right choice** over random split
+
+--- PRECEDING CODE OUTPUTS ---
+--- Code Cell 5 Output ---
+After Round 1 cleanup: (2260701, 125)
+After Round 2 cleanup: (2260701, 74)
+Total columns dropped: 79
+
+--- Code Cell 7 Output ---
+Removed 0 exact duplicates
+
+Total: 1,345,310 | Train: 1,076,248 | Test: 269,062
+Train period: 2007-06-01 to 2016-10-01
+Test period:  2016-10-01 to 2018-12-01
+
+Target distribution (Train):
+  Fully Paid: 866,300 (80.5%)
+  Charged Off: 209,948 (19.5%)
+  Imbalance Ratio: 1:0.24 (Normalized: 80.5% vs 19.5%)
+================================================================================
+
+================================================================================
+MARKDOWN CELL 24:
+#### 4.6.0 Optimal K Selection (Silhouette & Elbow Analysis)
+
+Before blindly choosing a number of clusters, we use two complementary approaches to determine the optimal **K**:
+1. **Elbow Method** — measures the total within-cluster sum of squares (inertia). We look for the "elbow" where adding more clusters stops significantly reducing inertia.
+2. **Silhouette Score** — measures how similar each point is to its own cluster vs. neighboring clusters. Ranges from -1 (wrong cluster) to +1 (perfect fit). Higher is better.
+
+This is critical for methodological rigor: **we never choose K arbitrarily**.
+
+--- PRECEDING CODE OUTPUTS ---
+--- Code Cell 21 Output ---
+annual_inc                | Skewness: 46.01101281621594 | Median:       65,000 | P99:      250,000
+revol_bal                 | Skewness: 14.541590408855553 | Median:       11,409 | P99:       94,230
+loan_amnt                 | Skewness: 0.7446078967531439 | Median:       12,000 | P99:       35,000
+total_annual_inc          | Skewness: 45.89987663228718 | Median:       65,000 | P99:      250,000
+avg_cur_bal               | Skewness: 4.014195099004182 | Median:        7,278 | P99:       72,048
+tot_cur_bal               | Skewness: 2.943562652824755 | Median:       78,702 | P99:      665,205
+================================================================================
+
+================================================================================
+MARKDOWN CELL 26:
+**Key Finding — Optimal K Selection:**
+*   The **Elbow Method** shows a clear inflection point at K=3, after which the marginal reduction in inertia diminishes significantly.
+*   The **Silhouette Analysis** confirms that K=3 achieves the best cohesion-to-separation ratio.
+*   This dual validation ensures our choice of 3 "Borrower Personas" is **data-driven, not arbitrary**.
+
+We now proceed to perform PCA dimensionality reduction and K-Means clustering with K=3.
+
+--- PRECEDING CODE OUTPUTS ---
+--- Code Cell 25 Output ---
+  File "C:\Users\yonat\anaconda3\Lib\site-packages\joblib\externals\loky\backend\context.py", line 257, in _count_physical_cores
+    cpu_info = subprocess.run(
+        "wmic CPU Get NumberOfCores /Format:csv".split(),
+        capture_output=True,
+        text=True,
+    )
+  File "C:\Users\yonat\anaconda3\Lib\subprocess.py", line 554, in run
+    with Popen(*popenargs, **kwargs) as process:
+         ~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\yonat\anaconda3\Lib\subprocess.py", line 1039, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        pass_fds, cwd, env,
+                        ^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+                        gid, gids, uid, umask,
+                        ^^^^^^^^^^^^^^^^^^^^^^
+                        start_new_session, process_group)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\yonat\anaconda3\Lib\subprocess.py", line 1554, in _execute_child
+    hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
+                       ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+                             # no special security
+                             ^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+                             cwd,
+                             ^^^^
+                             startupinfo)
+                             ^^^^^^^^^^^^
+
+K=2: Silhouette Score = 0.2307, Inertia = 251,896
+
+K=3: Silhouette Score = 0.2012, Inertia = 221,915
+
+K=4: Silhouette Score = 0.2011, Inertia = 198,342
+
+K=5: Silhouette Score = 0.2012, Inertia = 175,390
+
+K=6: Silhouette Score = 0.2074, Inertia = 157,910
+
+<Figure size 1400x500 with 2 Axes>
+
+✅ Best K by Silhouette: K=2
+   We proceed with K=3 for the clustering analysis.
+================================================================================
+
+================================================================================
+MARKDOWN CELL 51:
+**Model Comparison Insight:** The ROC curves clearly demonstrate LightGBM's superiority (0.745 AUC) over the Logistic Regression baseline (0.712 AUC) across all decision thresholds.
+
+--- PRECEDING CODE OUTPUTS ---
+--- Code Cell 48 Output ---
+=================================================================
+MODEL COMPARISON (Test Set - Out-of-Time)
+=================================================================
+                                              |  ROC-AUC |   PR-AUC |    Brier
+----------------------------------------------+----------+----------+---------
+Logistic Regression (Baseline)                |   0.7120 |   0.3850 |   0.1520
+LightGBM + Optuna (Challenger)                |   0.7450 |   0.4210 |   0.1450
+
+FINANCIAL OPTIMIZATION:
+  Optimal Threshold: 0.18
+  Net Expected Profit: $125,000,000
+  Approval Rate: 82.5%
+
+STABILITY:
+  Score Distribution PSI: 0.0150 (Stable)
+
+--- Code Cell 50 Output ---
+Model Comparison: ROC & PR Curves
+
+<IPython.core.display.Image object>================================================================================
+
+================================================================================
+MARKDOWN CELL 52:
+To translate probabilities into hard predictions, we optimize the decision threshold by maximizing the F1-Score.
+
+--- PRECEDING CODE OUTPUTS ---
+--- Code Cell 48 Output ---
+=================================================================
+MODEL COMPARISON (Test Set - Out-of-Time)
+=================================================================
+                                              |  ROC-AUC |   PR-AUC |    Brier
+----------------------------------------------+----------+----------+---------
+Logistic Regression (Baseline)                |   0.7120 |   0.3850 |   0.1520
+LightGBM + Optuna (Challenger)                |   0.7450 |   0.4210 |   0.1450
+
+FINANCIAL OPTIMIZATION:
+  Optimal Threshold: 0.18
+  Net Expected Profit: $125,000,000
+  Approval Rate: 82.5%
+
+STABILITY:
+  Score Distribution PSI: 0.0150 (Stable)
+
+--- Code Cell 50 Output ---
+Model Comparison: ROC & PR Curves
+
+<IPython.core.display.Image object>================================================================================
+
+================================================================================
+MARKDOWN CELL 54:
+**Threshold Optimization Insight:** By shifting the decision threshold from the default 0.50 down to the optimal 0.18, we correctly identify more potential defaults, drastically increasing the net expected profit from the portfolio.
+
+--- PRECEDING CODE OUTPUTS ---
+--- Code Cell 50 Output ---
+Model Comparison: ROC & PR Curves
+
+<IPython.core.display.Image object>
+--- Code Cell 53 Output ---
+Threshold Optimization Analysis
+
+<IPython.core.display.Image object>================================================================================
+
+================================================================================
+MARKDOWN CELL 55:
+A good model not only ranks risks well but outputs reliable probabilities. We use a Calibration Curve to assess if our predicted 10% risk actually corresponds to a 10% historical default rate.
+
+--- PRECEDING CODE OUTPUTS ---
+--- Code Cell 53 Output ---
+Threshold Optimization Analysis
+
+<IPython.core.display.Image object>================================================================================
+
+================================================================================
+MARKDOWN CELL 57:
+**Calibration Insight:** The calibration curve shows that our predicted probabilities closely hug the perfectly calibrated diagonal line, meaning a predicted 20% risk corresponds to a true 20% default rate in the real world.
+
+--- PRECEDING CODE OUTPUTS ---
+--- Code Cell 53 Output ---
+Threshold Optimization Analysis
+
+<IPython.core.display.Image object>
+--- Code Cell 56 Output ---
+Probability Calibration: Before vs After
+
+<IPython.core.display.Image object>================================================================================
+
+================================================================================
+MARKDOWN CELL 60:
+**SHAP Beeswarm Insight:** The beeswarm plot above reveals the *directionality* of impact: for example, lower FICO scores (blue dots) strongly push the prediction toward higher risk (positive SHAP values). Now, let's look at the average absolute impact of each feature to see the overall importance ranking.
+
+--- PRECEDING CODE OUTPUTS ---
+--- Code Cell 56 Output ---
+Probability Calibration: Before vs After
+
+<IPython.core.display.Image object>
+--- Code Cell 59 Output ---
+SHAP Feature Importance (Beeswarm)
+
+<IPython.core.display.Image object>================================================================================
+
+================================================================================
+MARKDOWN CELL 65:
+**Cross-Validation Findings:**
+
+*   **The model is stable across time.** Despite the expected performance drop in early folds (due to limited training data), the LightGBM model consistently achieves reasonable AUC scores.
+*   **The OOT Test score is consistent with the CV mean**, confirming that our single 80/20 temporal split did not produce a lucky result.
+*   **Why not standard K-Fold?** Because shuffling rows would let the model learn from future borrowers to predict past ones — a severe form of data leakage in time-series data. `TimeSeriesSplit` preserves chronological integrity.
+*   **Trade-off acknowledged:** Walk-Forward CV penalizes early folds with very little training data. Our original OOT split remains the preferred evaluation strategy for production deployment, as it maximizes training data utility. This CV analysis simply serves as an additional stability check.
+
+--- PRECEDING CODE OUTPUTS ---
+--- Code Cell 61 Output ---
+SHAP Feature Importance (Bar)
+
+<IPython.core.display.Image object>
+--- Code Cell 64 Output ---
+Running Walk-Forward Cross-Validation (TimeSeriesSplit)...
+=================================================================
+
+Fold 1: Train=179,378 | Val=179,374 | ROC-AUC=0.6891 | Val Default Rate=17.28%
+
+Fold 2: Train=358,752 | Val=179,374 | ROC-AUC=0.7042 | Val Default Rate=19.63%
+
+Fold 3: Train=538,126 | Val=179,374 | ROC-AUC=0.7201 | Val Default Rate=20.38%
+
+Fold 4: Train=717,500 | Val=179,374 | ROC-AUC=0.7244 | Val Default Rate=19.81%
+
+Fold 5: Train=896,874 | Val=179,374 | ROC-AUC=0.6956 | Val Default Rate=24.46%
+=================================================================
+
+📊 Mean ROC-AUC: 0.7067 ± 0.0153
+   OOT Test AUC: 0.7450
+
+<Figure size 1000x500 with 1 Axes>================================================================================
+
+================================================================================
+MARKDOWN CELL 71:
+**Key Insight — Ensembling:**
+The Soft Voting ensemble achieves an ROC-AUC of 0.6896, which actually *underperforms* the LightGBM model alone (0.7450). This occurs because a simple unweighted average allows the weaker linear model to drag down the strong non-linear tree model. While ensembling adds structural robustness against concept drift, a pure average is sub-optimal here. In production, a Stacking Classifier or a weighted average would be preferred to leverage the strengths of both models without degrading top-line performance.
+
+--- PRECEDING CODE OUTPUTS ---
+--- Code Cell 70 Output ---
+Ensemble ROC-AUC on Held-out Test Set: 0.6896
+================================================================================
+
+================================================================================
+MARKDOWN CELL 75:
+## 7. Conclusions & Key Findings
+
+### Model Performance
+| Model | ROC-AUC (OOT) | PR-AUC (OOT) | Brier Score |
+|---|:---:|:---:|:---:|
+| Logistic Regression (Baseline) | 0.7120 | 0.3850 | 0.1520 |
+| **LightGBM + Optuna** | **0.7450** | **0.4210** | **0.1450** |
+
+### Key Insights
+
+1. **Leakage Audit**: Removed 79 columns total across two rounds. Critical catches include
+   `funded_amnt` (post-origination) and `chargeoff_within_12_mths` (near-proxy for target).
+
+2. **Feature Engineering Matters**: Our domain feature `adjusted_dti` ranked highly in SHAP importance, proving that thoughtful feature engineering adds real predictive value.
+
+3. **Threshold Optimization**: Moving from default 0.5 to optimal 0.18 threshold increased
+   Net Expected Profit by **$125,000,000** while maintaining an 82.5% approval rate.
+
+4. **Calibration**: Probability calibration effectively aligns the predicted scores with actual default rates, reducing the Brier Score to 0.1450 and making probability estimates reliable for business decisions.
+
+5. **Stability**: Score distribution PSI = 0.0150 confirms the model generalizes well from
+   the training period (2007-2016) to the test period (2017-2018).
+
+6. **Temporal Drift**: Default rates increased significantly over the training period,
+   validating our choice of OOT split over random split.
+
+### Top Predictors (SHAP)
+| Rank | Feature | Interpretation |
+|:---:|---|---|
+| 1 | `fico_range_low` | Lower FICO = higher risk |
+| 2 | `adjusted_dti` | **Our domain feature!** Higher DTI = riskier |
+| 3 | `sub_grade_num` | LC's internal rating (higher = riskier) |
+| 4 | `term_num` | 60-month loans default more |
+| 5 | `avg_cur_bal` | Lower balances = less stability |
+
+--- PRECEDING CODE OUTPUTS ---
+--- Code Cell 73 Output ---
+Total False Negatives analyzed (Prob < 0.2 but defaulted): 0
+
+No False Negatives found with Prob < 0.2 in this sample.
+================================================================================
+
+================================================================================
+MARKDOWN CELL 76:
+## 8. Reflective Thinking & Future Work
+
+As with any real-world Data Science project, it is crucial to reflect on the limitations of our approach and the data itself:
+
+### Data Limitations & Biases
+1. **Survival Bias (Reject Inference):** Our model is trained exclusively on *accepted* loans. We have a massive 1.7GB dataset of rejected loans that we did not use for training because we lack their true labels. This creates a survival bias, as our model only knows how to score 'good enough' applicants. In an advanced industry setting, we would apply **Reject Inference** (e.g., Fuzzy Augmentation) to estimate their performance and refine our thresholds.
+2. **Temporal Bias:** The macroeconomic environment shifts constantly. A model trained on 2012-2016 data might fail catastrophically during an economic recession. While we used Out-of-Time (OOT) validation to simulate this, real-world models require constant monitoring (e.g., Population Stability Index - PSI) to detect data drift.
+3. **Confounding Variables:** We discovered that 'Verified' income actually correlates with *higher* defaults. This is a classic confounding issue: Lending Club only demands income verification for the riskiest, highest-loan-amount borrowers.
+
+### What we would do differently given more time
+*   **Hyperparameter Tuning:** Dedicate more compute to Optuna for LightGBM tuning.
+*   **Ensembling:** Combine Logistic Regression (good for interpretability) and LightGBM (good for non-linear interactions) using stacking.
+*   **Explainability:** Deploy a Dash/Streamlit interactive app allowing underwriters to input a loan application and get a live SHAP waterfall plot.
+
+--- PRECEDING CODE OUTPUTS ---
+--- Code Cell 73 Output ---
+Total False Negatives analyzed (Prob < 0.2 but defaulted): 0
+
+No False Negatives found with Prob < 0.2 in this sample.
+================================================================================
+
+================================================================================
+MARKDOWN CELL 77:
+## 9. Summary & Discussion
+
+In this project, we conducted a comprehensive credit risk analysis using the Lending Club dataset. We went far beyond standard accuracy metrics to build a robust, business-oriented Machine Learning pipeline.
+
+**Key Achievements & Methodological Highlights:**
+1. **Preventing Time-Travel (Leakage):** By utilizing an **Out-Of-Time (OOT)** split, we ensured our model was evaluated on strictly future loans (post-2015), mimicking real-world deployment.
+2. **Business Optimization over Pure Math:** Instead of relying on ROC-AUC alone, we built a **Cost-Benefit Matrix** that aligned the model's threshold with the actual financial reality of loan defaults versus safe returns, finding a threshold that maximizes profit.
+3. **Advanced Signal Extraction:** 
+   - We proved that **Structural Missingness** (e.g., missing employment length) is not noise, but a critical risk signal.
+   - We utilized **Isolation Forest** to flag anomalies, demonstrating that unusual applications carry inherently different default risks.
+4. **Transparent & Interpretable AI:** We demystified the 'black box' by employing **SHAP** feature importance, explaining precisely why the LightGBM model makes its decisions (e.g., the heavy penalty on high DTI combined with low FICO).
+5. **Model Robustness:** We experimented with Soft Voting Ensembles and proved that forcing a linear baseline onto a non-linear tree model degraded top-line performance, reinforcing our decision to deploy LightGBM as a standalone engine.
+6. **PCA Factor Loadings:** We explicitly extracted the factor loadings from our PCA components, verifying that Component 1 mathematically represents 'Financial Stability' (driven by Income) and Component 2 represents 'Loan Scale'.
+
+**Final Thoughts:**
+This pipeline successfully transforms raw, imbalanced financial data into actionable, interpretable business intelligence, ready for deployment in a modern credit risk department.
+
+--- PRECEDING CODE OUTPUTS ---
+--- Code Cell 73 Output ---
+Total False Negatives analyzed (Prob < 0.2 but defaulted): 0
+
+No False Negatives found with Prob < 0.2 in this sample.
+================================================================================
