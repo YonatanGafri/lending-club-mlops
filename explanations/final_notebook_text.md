@@ -391,7 +391,7 @@ Looking at the False Negatives, we can see they often look 'good' on paper (e.g.
 | **Standalone LightGBM** | **0.7272** |
 
 **Key Algorithmic Decisions:**
-1. **Target Proxy Leakage Prevented**: Removed internal `sub_grade` and interest rate assignments.
+1. **Target Proxy Leakage Prevented**: Removed strict future variables (e.g., payments, recoveries). Decided to **keep** `sub_grade` as a valid pre-origination risk proxy (expert baseline).
 2. **Embargo Period Enforced**: Excluded all loans originating $\ge$ 2016 to prevent survivorship bias (right-censoring).
 3. **Data Integrity Maintained**: Used LightGBM's native handling for categorical variables and missing values, avoiding destructive imputation techniques.
 4. **Generalization Optimized**: Optuna hyperparameters were cross-validated using chronological Walk-Forward `TimeSeriesSplit` across the entire training period.
