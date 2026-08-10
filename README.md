@@ -52,5 +52,8 @@ Financial landscapes evolve rapidly. We plan to implement monitoring using the *
 ### 8. Socio-Economic Zip Code Engineering (Idea)
 Currently, `zip_code` is just a high-cardinality prefix. In the future, we plan to engineer this by mapping zip codes to regional socio-economic tiers (e.g., average household income, unemployment rate) using external statistical bureau data, injecting macroeconomic context directly into the model.
 
+### 9. Isolation Forest for Anomaly Detection
+Rather than filtering out outliers (which is dangerous in credit risk, as anomalies are often high-risk defaults), we plan to train an **Isolation Forest** model to flag unusual borrowers. This will be engineered as a distinct `is_anomaly` feature, providing linear and tree models with a powerful signal to treat these edge-case borrowers with higher scrutiny, without losing their valuable data.
+
 ---
 עד כאן הפרוייקט מוכן
