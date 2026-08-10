@@ -33,4 +33,24 @@ We transform raw signals into ML-ready inputs, ensuring fairness across differen
 * **Heavy-Tailed Log Capping:** Computed P99 thresholds to cap extreme financial outliers (like $10M incomes) and applied `.log1p()`. This prevents extreme gradients in distance-based algorithms, allowing us to build explicit `tree_features` and `linear_features` lists.
 
 ---
+
+## 🔮 Future Roadmap & Next Steps
+
+### 5. Modeling & Evaluation Strategy
+We plan to benchmark multiple architectures—**Logistic Regression, Tree-based Ensembles (LightGBM/XGBoost), and Neural Networks**—using our meticulously engineered features.
+* **Evaluation Metrics:** ROC AUC, F1-Score, and Precision-Recall Curves.
+* **Business Translation:** Optimizing the probability threshold by applying an **Expected Profit / Cost-Benefit Matrix** to maximize ROI.
+* **Explainable AI & Error Analysis:** Deep-diving into model decisions using **SHAP** values, followed by rigorous Error Analysis (investigating False Negatives and False Positives) to identify blind spots.
+
+### 6. Production & Real-Time Inference (RT)
+We aim to deploy the best model as a Real-Time (RT) Inference API tool that accepts JSON payloads and returns predictions at low latency. 
+* **Architecture Thoughts:** To hit low-latency SLAs, we may need a high-performance **Feature Store** (e.g., Redis or DynamoDB) to cache pre-computed borrower aggregates and socio-economic variables, avoiding expensive on-the-fly SQL joins.
+
+### 7. Data Drift & Monitoring
+Financial landscapes evolve rapidly. We plan to implement monitoring using the **Population Stability Index (PSI)** to detect Data Drift (e.g., inflation shifting income distributions). If PSI crosses a critical threshold, the model will trigger automated retraining pipelines.
+
+### 8. Socio-Economic Zip Code Engineering (Idea)
+Currently, `zip_code` is just a high-cardinality prefix. In the future, we plan to engineer this by mapping zip codes to regional socio-economic tiers (e.g., average household income, unemployment rate) using external statistical bureau data, injecting macroeconomic context directly into the model.
+
+---
 עד כאן הפרוייקט מוכן
