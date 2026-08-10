@@ -56,4 +56,47 @@ Currently, `zip_code` is just a high-cardinality prefix. In the future, we plan 
 Rather than filtering out outliers (which is dangerous in credit risk, as anomalies are often high-risk defaults), we plan to train an **Isolation Forest** model to flag unusual borrowers. This will be engineered as a distinct `is_anomaly` feature, providing linear and tree models with a powerful signal to treat these edge-case borrowers with higher scrutiny, without losing their valuable data.
 
 ---
-עד כאן הפרוייקט מוכן
+
+## 🏗️ Target Project Architecture
+
+Moving from a monolithic notebook to an industry-grade, modular MLOps system, our target directory structure is:
+
+```text
+lending_club_ds/
+├── src/                # Internal modular library
+│   ├── data_processing.py
+│   ├── features.py
+│   ├── models.py
+│   └── metrics.py
+├── notebooks/          # Clean research notebooks importing from src/ via %autoreload
+├── models/             # Storage for serialized trained models (.joblib)
+├── app.py              # Local FastAPI server for model inference
+└── streamlit_app.py    # Local Web UI for testing the API
+```
+
+## 🗺️ Development Roadmap & Pipeline
+
+We are executing a structured, 4-phase transformation to make this project production-ready:
+
+* **🟡 Phase 1: Refactoring**
+  Extracting logic from the notebook into clean Python modules inside `src/`. This will be developed on a dedicated Git branch (`modeling`).
+* **🟠 Phase 2: Model Serialization & Evaluation**
+  Training the selected model (e.g., XGBoost / TensorFlow), saving the artifact to `models/`, and generating modular evaluation metrics.
+* **🔵 Phase 3: Local API & UI**
+  Exposing the trained model via a FastAPI server (`app.py`) that accepts JSON requests, executes feature engineering via `src/`, and returns risk predictions. We will also build an interactive local frontend using Streamlit (`streamlit_app.py`).
+* **🟢 Phase 4: MLOps & Monitoring**
+  Adding a Data Drift monitoring mechanism using the Population Stability Index (PSI) inside `src/models.py` to trigger automated retraining checks.
+
+## 🚀 Planned Local Quick Start
+
+Once the pipeline is established, the local services can be spun up using the following commands:
+
+**Start the API Server (FastAPI):**
+```bash
+uvicorn app:app --reload
+```
+
+**Launch the Frontend UI (Streamlit):**
+```bash
+streamlit run streamlit_app.py
+```
