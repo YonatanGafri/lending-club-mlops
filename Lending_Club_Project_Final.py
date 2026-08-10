@@ -191,9 +191,9 @@ print(f'  Charged Off: {(train_df["target"] == 1).sum():,} ({(train_df["target"]
 print(f'  Imbalance Ratio: 1:{(train_df["target"] == 1).sum() / (train_df["target"] == 0).sum():.2f} (Normalized: {(train_df["target"] == 0).mean()*100:.1f}% vs {(train_df["target"] == 1).mean()*100:.1f}%)')
 
 
-# ## 4. Exploratory Data Analysis (EDA)
+# ## 3. Exploratory Data Analysis (EDA)
 # 
-# ### 4.1 Target Distribution & Temporal Drift
+# ### 3.1 Target Distribution & Temporal Drift
 
 # **Key Findings:**
 # - **Class Imbalance**: 1:0.22 ratio (or 4.55:1) (82.0% Fully Paid vs 18.0% Charged Off)
@@ -236,7 +236,7 @@ plt.tight_layout()
 plt.show()
 
 
-# ### 4.2 Structural Missingness Analysis
+# ### 3.2 Structural Missingness Analysis
 # 
 
 # In[6]:
@@ -255,8 +255,8 @@ print('-' * 105)
 for col in structural_cols:
     if col not in train_df.columns:
         continue
-    pct_missing = train_df[col].null_count() / train_df.shape[0] * 100
-    missing_mask = train_df[col].is_null()
+    pct_missing = train_df.select(pl.col(col).null_count()).item() / train_df.height * 100
+    missing_mask = pl.col(col).is_null()
     dr_missing = train_df.filter(missing_mask)['target'].mean()
     dr_present = train_df.filter(~missing_mask)['target'].mean()
     signal = 'NULL=never (protective)' if dr_missing < dr_present else 'NULL=RISKY!'
@@ -267,7 +267,7 @@ for col in structural_cols:
 # default at **20.3%** vs 17.6% for those with known values. This is a 2.7pp difference!
 # All `mths_since_*` columns show the opposite: NULL means 'never had this event' = lower risk.
 
-# ### 4.3 Business Questions & Hypotheses Testing
+# ### 3.3 Business Questions & Hypotheses Testing
 # 
 # **1. Term Length vs Default:** Does a longer term (60 months vs 36 months) mean lower payments -> fully paid, OR more exposure time -> more default?
 # **2. Interest Rate:** Is high interest rate a cause of default or a symptom?
@@ -309,7 +309,7 @@ axes[2, 0].set_title('Q5: Verification Status vs Default Rate')
 
 # 6. Scatter Plot: Loan Amount vs Installment
 # Sample 5000 points to avoid overplotting
-sample_df = train_df_pd.sample(5000, random_state=42)
+sample_df = train_df.sample(n=5000, seed=42).to_pandas()
 sns.scatterplot(x='loan_amnt', y='installment', hue='target', data=sample_df, alpha=0.5, ax=axes[2, 1], palette=['#2ca02c', '#d62728'])
 axes[2, 1].set_title('Q6: Loan Amount vs Installment (Colored by Default)')
 
@@ -325,7 +325,7 @@ plt.show()
 # 5. **Verification Status:** Interestingly, 'Verified' loans often have *higher* default rates! This is because Lending Club only verifies income for the most risky/high-amount borrowers. This is a classic confounding variable.
 # 
 
-# ### 4.4 Sub-Grade Monotonicity & Credit Risk EDA
+# ### 3.4 Sub-Grade Monotonicity & Credit Risk EDA
 
 # In[8]:
 
@@ -376,7 +376,7 @@ plt.show()
 # **Key Insight — Risk Monotonicity:**
 # The plot confirms a strict monotonic relationship between Lending Club's assigned sub-grades and the actual default rate. This validates that the original LC grading system is highly predictive of risk. Our model's goal will be to identify mispriced loans *within* these sub-grades.
 
-# ### 4.5 Heavy Tails Analysis
+# ### 3.5 Heavy Tails Analysis
 
 # In[ ]:
 
@@ -385,7 +385,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
 
-heavy_cols = ['annual_inc', 'revol_bal', 'loan_amnt', 'total_annual_inc', 'avg_cur_bal', 'tot_cur_bal']
+heavy_cols = ['revol_bal', 'loan_amnt', 'total_annual_inc', 'avg_cur_bal', 'tot_cur_bal']
 heavy_cols = [c for c in heavy_cols if c in train_df.columns]
 
 train_df_pd = train_df.to_pandas()
@@ -415,7 +415,7 @@ plt.show()
 # **Key Insight — Heavy-Tailed Distributions:** 
 # The distributions of financial features like `annual_inc` (Median: $63K, P99: $250K, Skewness: ~40.2) and `revol_bal` exhibit extreme right-skewness. To ensure all model architectures—including linear algorithms (e.g., Logistic Regression) and tree-based models (e.g., LightGBM)—can learn effectively without decision boundaries being skewed by extreme outliers, we apply capping (at P99) and log transformations (`log1p`). This standardization ensures a fair and robust benchmark across all models during evaluation.
 
-# ### 4.6 Unsupervised Learning (Clustering & Dimensionality Reduction)
+# ### 3.6 Unsupervised Learning (Clustering & Dimensionality Reduction)
 # 
 # As part of our Exploratory Data Analysis, we use unsupervised learning to discover hidden structures and natural groupings among borrowers without using the target label (`default`). 
 # This helps us answer: Are there distinct 'Borrower Personas' in our data?
@@ -424,7 +424,7 @@ plt.show()
 # 
 # Because our financial features are heavily skewed (as seen in 4.5), we use median imputation for the remaining missing values prior to clustering, as the median is robust to extreme outliers.
 
-# ### 4.6.1 Feature Selection & Multicollinearity Audit
+# ### 3.6.1 Feature Selection & Multicollinearity Audit
 # 
 # Before applying distance-based unsupervised learning algorithms, we verify feature independence within our selected core financial feature space:
 # * **Selected Features:** `loan_amnt`, `int_rate`, `annual_inc`, `dti`, `revol_util`, `revol_bal`.
@@ -449,11 +449,23 @@ all_numeric_features = [
     'revol_util', 'total_acc', 'tot_cur_bal', 'avg_cur_bal'
 ]
 
-# Filter features present in df and drop missing values via median imputation
-existing_num_features = [col for col in all_numeric_features if col in df.columns]
-df_full_num = train_df.select(existing_num_features).sample(n=50000, seed=42).to_pandas()
-df_full_num = df_full_num.fillna(df_full_num.median())
+# === תיקון בתא 35: דגימת הפיצ'רים וה-Target ביחד ===
+existing_num_features = [col for col in all_numeric_features if col in train_df.columns]
 
+# נדגום 50,000 שורות שמכילות גם את הפיצ'רים וגם את ה-target
+cols_to_sample = existing_num_features + ['target']
+# Sample 50000 rows in Polars
+df_sampled_pl = train_df.select(cols_to_sample).sample(n=50000, seed=42)
+
+# Fill nulls with medians natively in Polars
+medians_pl = {col: df_sampled_pl[col].drop_nulls().median() for col in existing_num_features}
+for col in existing_num_features:
+    df_sampled_pl = df_sampled_pl.with_columns(pl.col(col).fill_null(medians_pl[col]))
+
+# Convert only the fully cleaned subset to pandas for seaborn / scikit-learn
+df_sampled = df_sampled_pl.to_pandas()
+df_full_num = df_sampled[existing_num_features]
+target_sampled = df_sampled['target'].values
 # Compute full Pearson correlation matrix
 full_corr_matrix = df_full_num.corr()
 
@@ -474,11 +486,7 @@ print(f"✅ Full Audit Completed: Identified collinear clusters (e.g., loan_amnt
 print(f"✅ Filtered down to 6 independent features with max pairwise correlation = {max_corr_clean:.2f} (< 0.70)")
 
 
-# ### 4.6.1 Full Dataset Correlation Audit & Feature Selection
-# 
-# To prevent multicollinearity from distorting distance metrics in unsupervised learning, we first conduct a full Pearson Correlation Audit across all numeric dataset features.
-# 
-# **1. Full Heatmap Observations:**
+# **Heatmap Observations:**
 # As displayed in the comprehensive heatmap below, several feature clusters exhibit severe multicollinearity ($|r| \ge 0.70$):
 # * `loan_amnt` vs. `installment` ($r = 0.95$) and `funded_amnt` ($r = 0.99$).
 # * `tot_cur_bal` vs. `avg_cur_bal` ($r = 0.82$).
@@ -489,7 +497,7 @@ print(f"✅ Filtered down to 6 independent features with max pairwise correlatio
 # 
 # * **Validation:** Within this curated 6-feature space, the maximum pairwise correlation drops to **$r = 0.35$**, strictly satisfying our $|r| < 0.70$ independence threshold.
 
-# ### 4.6.2 Optimal K Selection (Elbow & Silhouette Analysis)
+# ### 3.6.2 Optimal K Selection (Elbow & Silhouette Analysis)
 # 
 # To avoid arbitrary cluster assignment, we evaluate cluster quality across $K \in [2, 6]$ using two complementary methods:
 # 1. **Elbow Method (Inertia):** Measures within-cluster sum of squares. We dynamically locate the geometric elbow (point of maximum curvature) representing diminishing returns.
@@ -575,27 +583,24 @@ print(f"\n✅ Proceeding with K={chosen_k} based on Elbow bend and business gran
 # In[38]:
 
 
-# --- Step 3: K-Means Training & Visual Persona Profiling (Dynamic Ranking) ---
+# --- Step 3: K-Means Training & Visual Persona Profiling (Corrected & Dynamic) ---
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Train final KMeans model with chosen K=3
+# 1. אימון מודל ה-KMeans
 kmeans_final = KMeans(n_clusters=chosen_k, random_state=42, n_init=10)
 df_unsup['Cluster'] = kmeans_final.fit_predict(X_scaled)
 
-# Dynamically attach target column for default rate evaluation
-target_col = 'target' if 'target' in df.columns else ('is_default' if 'is_default' in df.columns else None)
+# 2. התיקון: הצמדת עמודת ה-target שנלקחה מאותן 50,000 שורות שנדגמו
+df_unsup['target'] = target_sampled
 
-if target_col:
-    df_unsup['default_rate'] = df.select(target_col).sample(n=50000, seed=42).to_pandas().values
-
-# Compute cluster profile summary (mean values)
+# 3. חישוב פרופיל הממוצעים לכל אשכול
 cluster_profile = df_unsup.groupby('Cluster').mean()
 
-# DYNAMIC SORTING: Sort clusters by default rate ascending (from lowest risk to highest risk)
-cluster_profile = cluster_profile.sort_values('default_rate', ascending=True)
+# 4. מיון דינמי מבוסס על אחוז הדיפולט (מהסיכון הנמוך לגבוה)
+cluster_profile = cluster_profile.sort_values('target', ascending=True)
 
-# Assign dynamic, rank-ordered Persona Names (No hardcoding!)
+# 5. שיוך שמות לפרסונות
 dynamic_persona_names = [
     'Persona 1: Prime / Safe (Low Risk)',
     'Persona 2: High Exposure / Wealthy (Mid Risk)',
@@ -603,7 +608,7 @@ dynamic_persona_names = [
 ]
 cluster_profile.index = dynamic_persona_names
 
-# 1. VISUAL DISPLAY: Styled Interactive HTML Table in Notebook
+# 6. הצגת הטבלה המעוצבת
 print("=== Dynamic Borrower Personas Summary Table (Ranked by Risk) ===")
 styled_table = cluster_profile.style.background_gradient(cmap='YlOrRd')\
     .format({
@@ -613,7 +618,7 @@ styled_table = cluster_profile.style.background_gradient(cmap='YlOrRd')\
         'dti': '{:.1f}',
         'revol_util': '{:.1f}%',
         'revol_bal': '${:,.0f}',
-        'default_rate': '{:.1%}'
+        'target': '{:.1%}'
     })
 display(styled_table)
 
@@ -621,14 +626,14 @@ display(styled_table)
 fig, axes = plt.subplots(2, 3, figsize=(16, 10))
 axes = axes.flatten()
 
-metrics = ['loan_amnt', 'annual_inc', 'int_rate', 'dti', 'revol_util', 'default_rate']
+metrics = ['loan_amnt', 'annual_inc', 'int_rate', 'dti', 'revol_util', 'target']
 titles = ['Loan Amount ($)', 'Annual Income ($)', 'Interest Rate (%)', 'DTI Ratio', 'Revolving Util (%)', 'DEFAULT RATE (%)']
 colors = ['#2ecc71', '#3498db', '#e74c3c']  # Green (Safe), Blue (Mid), Red (High Risk)
 
 for idx, (metric, title) in enumerate(zip(metrics, titles)):
     ax = axes[idx]
     values = cluster_profile[metric]
-    if metric == 'default_rate':
+    if metric == 'target':
         values = values * 100  # Convert to percentage
     
     bars = ax.bar(cluster_profile.index, values, color=colors, edgecolor='black', alpha=0.85)
@@ -649,7 +654,7 @@ plt.savefig('eda_plots/cluster_personas_visual.png', dpi=150)
 plt.show()
 
 
-# ### 4.6.3 Key Findings & Business Takeaways (Borrower Personas)
+# ### 3.6.3 Key Findings & Business Takeaways (Borrower Personas)
 # 
 # > **Key Unsupervised Insight:** Even though K-Means had **zero access to the target label (`default`) during training**, purely geometrical clustering in the 6D financial feature space successfully segregated borrowers into 3 distinct risk tiers, with actual default rates ranging from **12.1% to 23.7%**.
 # 
@@ -669,7 +674,7 @@ plt.show()
 #    * **Financial Profile:** Lowest Income ($56.3K), Highest DTI (**22.4%**), Highest Credit Utilization (**67.7%**), and Highest Interest Rate (15.2%).
 #    * **Domain Takeaway:** Classic liquidity crisis profile. Severe debt overload and maxed-out credit lines nearly double the default risk compared to Persona 1 (~1 in 4 borrowers default).
 
-# ### 4.6.4 PCA 2D Cluster Projection & Visual Validation
+# ### 3.6.4 PCA 2D Cluster Projection & Visual Validation
 # 
 # To validate our dynamic borrower personas visually in a two-dimensional space:
 # 
@@ -680,7 +685,7 @@ plt.show()
 # In[41]:
 
 
-# --- 4.6.4 Dynamic Persona Mapping & PCA Visualization ---
+# --- 3.6.4 Dynamic Persona Mapping & PCA Visualization ---
 
 # 1. Run PCA
 from sklearn.decomposition import PCA
@@ -734,27 +739,14 @@ final_profiles = df_unsup.groupby('Borrower_Persona')[unsup_features + ['target'
 
 # Rename columns for consistency across the notebook
 final_profiles.rename(columns={
-    'target': 'Default_Rate',
-    'total_annual_inc': 'annual_inc',
-    'total_dti': 'dti'
+    'target': 'Default_Rate'
 }, inplace=True)
 
 display(final_profiles)
 
 
-# ### Key Findings & Business Takeaways (Borrower Personas)
-# 
-# **Dynamic Persona Analysis:**
-# By mapping the K-Means clusters strictly by their default rates, we reveal three distinct, consistent borrower profiles in the data:
-# 
-# *   **Persona 1: Prime / Safe (Lowest Risk):** Represents conservative borrowers with lower loan amounts, the lowest interest rates, and minimal credit utilization. Unsurprisingly, they exhibit the lowest default rate.
-# *   **Persona 2: High Exposure (Moderate Risk):** Represents high-income borrowers who take out massive loans and carry significant revolving balances. Despite their wealth, their high exposure increases their default risk.
-# *   **Persona 3: Highly Leveraged (Highest Risk):** Represents borrowers under severe financial strain, characterized by the highest Debt-to-Income (DTI) ratios, maximized revolving utilization, and the highest interest rates. This group consistently suffers the highest default rate.
-# 
-# **Conclusion:** 
-# This unsupervised exploration confirms that natural risk groupings exist purely based on financial geometry in the 6D space—even before any supervised predictive model sees the target label! We will leverage these Personas as a powerful engineered feature in our downstream predictive models.
 
-# ### 4.6.1 PCA Factor Loadings
+# ### 3.6.5 PCA Factor Loadings
 # To deeply understand our PCA clusters, we analyze the **Factor Loadings**. This shows us exactly which original features mathematically drive Principal Component 1 (PC1) and Principal Component 2 (PC2).
 # 
 # 
@@ -762,7 +754,7 @@ display(final_profiles)
 # In[ ]:
 
 
-# --- 4.6.1 PCA Factor Loadings ---
+# --- 3.6.5 PCA Factor Loadings ---
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -786,7 +778,7 @@ plt.show()
 # This mathematically validates our Persona clusters!
 # 
 
-# #### 4.6.2 PCA vs t-SNE: Global Structure vs Local Neighborhoods
+# ### 3.6.6 PCA vs t-SNE: Global Structure vs Local Neighborhoods
 # 
 # PCA is a **linear** method that preserves **global variance** — it finds the axes of maximum spread in the data. However, it may miss complex, non-linear relationships.
 # 
@@ -797,7 +789,7 @@ plt.show()
 # In[ ]:
 
 
-# --- 4.6.2 t-SNE Non-Linear Projection ---
+# --- 3.6.6 t-SNE Non-Linear Projection ---
 from sklearn.manifold import TSNE
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -853,7 +845,7 @@ plt.show()
 # *   **t-SNE** reveals local density patterns that PCA misses. Default cases (red) tend to cluster in specific neighborhoods, suggesting that default risk is not uniformly distributed across the feature space, but concentrated in certain "pockets" of borrower profiles.
 # *   The fact that both methods show overlapping default/non-default populations validates a critical business insight: **many defaults are unpredictable from financial features alone** (life events, economic shocks).
 
-# ### 4.7 Anomaly Detection (Isolation Forest)
+# ### 3.7 Anomaly Detection (Isolation Forest)
 # Are there highly anomalous loan applications that behave differently? We use **Isolation Forest** (an unsupervised anomaly detection algorithm) to flag the top 1% most unusual borrowers and check if their default rate is significantly different.
 # 
 # 
@@ -882,30 +874,10 @@ print(anomaly_stats)
 # Borrowers flagged as 'Anomalies' (-1) by the Isolation Forest have a notably different default rate compared to the standard population (1). This proves that unsupervised anomaly flagging adds a valuable signal: anomalies in this dataset represent ultra-wealthy or extremely conservative profiles who are actually **safer** borrowers, not higher credit risks.
 # 
 
-# ### 4.8 Correlation Heatmap
+
+# ## 4. Feature Engineering
 # 
-# To complete our visual storytelling, we generate a correlation heatmap of the numerical features.
-
-# In[15]:
-
-
-# 1. Correlation Heatmap
-corr_features = ['loan_amnt', 'int_rate', 'installment', 'total_annual_inc', 'total_dti', 'fico_range_low', 'revol_util']
-corr_matrix = df.select(corr_features).to_pandas().corr()
-
-plt.figure(figsize=(10, 6))
-sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt=".2f", vmin=-1, vmax=1)
-plt.title('Correlation Heatmap of Financial Features')
-plt.show()
-
-
-
-# **Key Insight — Multicollinearity:**
-# The heatmap shows minimal extreme correlations among our core features, with the exception of `loan_amnt` and `installment` (which are mathematically coupled). This lack of severe multicollinearity means we don't need to aggressively drop features before feeding them into our model.
-
-# ## 5. Feature Engineering
-# 
-# ### 5.1 Structural Missingness Flags
+# ### 4.1 Structural Missingness Flags
 # Create binary indicators for NULL = 'never had event', then fill NULLs with 999.
 # Missing values in credit data are rarely random. Creating explicit binary flags for missingness allows the model to learn if the *absence* of information is itself a risk signal.
 # 
@@ -913,6 +885,18 @@ plt.show()
 
 # In[16]:
 
+
+# %% [markdown]
+"""
+### The Recency Transformation (1 / (x + 1))
+
+Previously, missing values in `mths_since_last_*` were imputed with the arbitrary value `999`. While tree-based algorithms (like LightGBM) handle massive arbitrary scalars perfectly fine by simply creating a split condition (e.g., `x > 100`), **distance-based algorithms (Linear Regression, MLPs, Neural Networks) are severely distorted by this**. A massive scalar artificially explodes the gradients and distorts the Euclidean distance, creating an unfair benchmark penalty for linear models.
+
+**The Solution:** We replaced the 999 imputation with the reciprocal recency formula `1 / (x + 1)`. 
+- An event that happened 0 months ago gets a value of `1.0` (Maximum risk / highly recent).
+- An event that happened 100 months ago gets a value of `~0.01` (Low risk / very old).
+- A missing value (`NULL`), which in this context explicitly indicates that the negative event *never happened*, is seamlessly imputed as `0.0`. This beautifully scales the feature between `0.0` and `1.0`, treating "never" as "infinite time ago" (zero risk), ensuring mathematical fairness and stability across all model architectures.
+"""
 
 # Create structural missingness flags
 structural_miss_cols = [
@@ -927,8 +911,9 @@ for col in structural_miss_cols:
     flag_name = f'{col}_never'
     train_df = train_df.with_columns(pl.col(col).is_null().cast(pl.Int8).alias(flag_name))
     test_df = test_df.with_columns(pl.col(col).is_null().cast(pl.Int8).alias(flag_name))
-    train_df = train_df.with_columns(pl.col(col).fill_null(999))
-    test_df = test_df.with_columns(pl.col(col).fill_null(999))
+    # Recency Transformation: 1 / (x + 1), treating NULL (never happened) as 0.0
+    train_df = train_df.with_columns((1.0 / (pl.col(col) + 1.0)).fill_null(0.0).alias(col))
+    test_df = test_df.with_columns((1.0 / (pl.col(col) + 1.0)).fill_null(0.0).alias(col))
 
 # emp_length missing flag (anomalous - high default rate when missing)
 if 'emp_length' in train_df.columns:
@@ -938,7 +923,7 @@ if 'emp_length' in train_df.columns:
 print(f'Train shape after missingness flags: {train_df.shape}')
 
 
-# ### 5.2 Domain Features (Credit Risk Intuition)
+# ### 4.2 Domain Features (Credit Risk Intuition)
 # Raw features often lack business context. We combine variables to create new ratios (like adjusted DTI) that directly reflect a borrower's financial leverage and stress.
 
 # In[17]:
@@ -976,7 +961,7 @@ print('Domain features created: installment_to_income, adjusted_dti, loan_to_inc
 print(f'Train shape: {train_df.shape}')
 
 
-# ### 5.3 Categorical Encoding & Final Cleanup
+# ### 4.3 Categorical Encoding & Final Cleanup
 # Machine learning models require numerical inputs. We ordinally encode features with a natural rank and one-hot encode nominal categories to ensure the model correctly interprets their relationships.
 
 # In[18]:
@@ -989,9 +974,8 @@ emp_length_map = {'< 1 year': 0, '1 year': 1, '2 years': 2, '3 years': 3,
 if 'emp_length' in train_df.columns:
     train_df = train_df.with_columns(pl.col('emp_length').replace_strict(emp_length_map, default=None).cast(pl.Float64).alias('emp_length_num'))
     test_df = test_df.with_columns(pl.col('emp_length').replace_strict(emp_length_map, default=None).cast(pl.Float64).alias('emp_length_num'))
-    median_emp = float(train_df['emp_length_num'].median())
-    train_df = train_df.with_columns(pl.col('emp_length_num').fill_null(median_emp))
-    test_df = test_df.with_columns(pl.col('emp_length_num').fill_null(median_emp))
+    train_df = train_df.with_columns(pl.col('emp_length_num').fill_null(0.0))
+    test_df = test_df.with_columns(pl.col('emp_length_num').fill_null(0.0))
 
 # term encoding
 if 'term' in train_df.columns:
@@ -1006,6 +990,76 @@ if 'sub_grade' in train_df.columns:
     test_df = test_df.with_columns(pl.col('sub_grade').replace_strict(sg_map, default=0).cast(pl.Int32).alias('sub_grade_num'))
 
 print(f'Train shape after encoding: {train_df.shape}')
+
+
+# ### 4.4 K-Means Borrower Personas (Engineered Feature)
+# 
+# We reintegrate the unsupervised clustering logic to assign each borrower to one of the 3 risk personas discovered during EDA.
+
+# In[19]:
+
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+
+# 1. Define features (updated names based on pipeline state)
+persona_features = ['loan_amnt', 'int_rate', 'total_annual_inc', 'total_dti', 'revol_util', 'revol_bal']
+
+# 2. Impute missing values with the median from train_df
+train_medians = {f: train_df[f].drop_nulls().median() for f in persona_features}
+for f in persona_features:
+    train_df = train_df.with_columns(pl.col(f).fill_null(train_medians[f]))
+    test_df = test_df.with_columns(pl.col(f).fill_null(train_medians[f]))
+
+# 3. Extract to numpy
+X_train_k = train_df.select(persona_features).to_numpy()
+X_test_k = test_df.select(persona_features).to_numpy()
+
+# 4. Scale features
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train_k)
+X_test_scaled = scaler.transform(X_test_k)
+
+# 5. Train KMeans
+kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
+train_labels = kmeans.fit_predict(X_train_scaled)
+test_labels = kmeans.predict(X_test_scaled)
+
+# 6. Assign labels back to train/test as categorical features
+# Polars Categorical requires string backing
+train_df = train_df.with_columns(pl.Series('borrower_persona', [f"Persona_{l}" for l in train_labels]).cast(pl.Categorical))
+test_df = test_df.with_columns(pl.Series('borrower_persona', [f"Persona_{l}" for l in test_labels]).cast(pl.Categorical))
+
+print(f"Successfully integrated 'borrower_persona' into DataFrames.")
+
+
+# ### 4.5 Heavy-Tailed Variable Log Capping (For Linear Models)
+
+# %% [markdown]
+"""
+### Handling Heavy-Tailed Distributions & Log Capping
+
+Financial data features like `annual_inc` and `revol_bal` exhibit extreme right-skewness (heavy tails). 
+While tree-based algorithms remain invariant to monotonic transformations and handle outliers inherently well, **feeding raw skewed features into distance-based models (Neural Networks, Logistic Regression) causes severe instability**. Extreme outliers drastically shift the decision boundary and dominate the weight updates, crippling the linear models' performance and resulting in an unfair benchmark.
+
+**The Solution:**
+1. **P99 Capping:** We compute the 99th percentile (`P99`) for each heavy-tailed feature and cap all extreme outliers at this threshold. This prevents a single $10M income borrower from distorting the entire gradient plane.
+2. **Log1p Transformation:** We apply a `log1p` transformation to compress the massive range into a more normal distribution.
+3. **Feature Space Splitting:** Instead of replacing the original columns (which would degrade the tree-based models' interpretability and performance), we create duplicate columns suffixed with `_log_capped`. In our downstream modeling pipeline, we now explicitly split our features into `tree_features` (using the raw variables) and `linear_features` (using the scaled variables), guaranteeing an optimal and fair benchmark for both architectures.
+"""
+
+# In[20]:
+
+heavy_cols_linear = ['revol_bal', 'loan_amnt', 'total_annual_inc', 'avg_cur_bal', 'tot_cur_bal']
+heavy_cols_linear = [c for c in heavy_cols_linear if c in train_df.columns]
+
+for col in heavy_cols_linear:
+    p99 = train_df.select(pl.col(col).drop_nulls().quantile(0.99)).item()
+    capped_expr = pl.when(pl.col(col) > p99).then(p99).otherwise(pl.col(col))
+    train_df = train_df.with_columns(capped_expr.log1p().alias(f"{col}_log_capped"))
+    test_df = test_df.with_columns(capped_expr.log1p().alias(f"{col}_log_capped"))
+
+print(f"Created log-capped features for linear models: {[f'{c}_log_capped' for c in heavy_cols_linear]}")
 
 
 # ## 6. Modeling
@@ -1102,18 +1156,29 @@ import os
 os.makedirs('model_plots', exist_ok=True)
 
 # Generate X_train and y_train directly from train_df since they are not in pandas yet
-features = [
+tree_features = [
     "loan_amnt", "total_annual_inc", "total_dti", "revol_util", 
     "fico_range_low", "adjusted_dti", "installment_to_income", 
     "loan_to_income", "estimated_revol_limit", "emp_length_num", 
-    "term_num", "purpose", "home_ownership", "verification_status"
+    "emp_length_missing", "term_num", "purpose", "home_ownership", "verification_status",
+    "borrower_persona"
 ]
-X_train = train_df.select(features).to_pandas()
+
+# For linear models, swap out raw heavy-tailed features for log-capped versions
+linear_features = tree_features.copy()
+for hc in heavy_cols_linear:
+    if hc in linear_features:
+        linear_features.remove(hc)
+        linear_features.append(f"{hc}_log_capped")
+
+# NOTE: For this benchmark with LightGBM, we use tree_features. 
+# Downstream linear pipelines should reference linear_features.
+X_train = train_df.select(tree_features).to_pandas()
 y_train = train_df.select("target").to_pandas()["target"]
-X_test = test_df.select(features).to_pandas()
+X_test = test_df.select(tree_features).to_pandas()
 y_test = test_df.select("target").to_pandas()["target"]
 
-cat_cols = ["purpose", "home_ownership", "verification_status"]
+cat_cols = ["purpose", "home_ownership", "verification_status", "borrower_persona"]
 for col in cat_cols:
     if col in X_train.columns:
         X_train[col] = X_train[col].astype('category')

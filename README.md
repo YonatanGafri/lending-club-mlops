@@ -1,35 +1,36 @@
 # Lending Club Credit Risk Modeling 🏦📊
 
-This repository contains a comprehensive, end-to-end Data Science project predicting loan defaults using the Lending Club dataset. Designed with production-level standards, it tackles extreme class imbalance, strictly guards against data leakage, and optimizes models for actual financial impact.
-
-## 🌟 Key Highlights & Advanced Features
-
-* **Rigorous Data Preprocessing & Leakage Prevention:** Built with strict separation of train/test data to prevent information leakage, simulating real-world Out-Of-Time (OOT) validation.
-* **Advanced Feature Engineering (WOE & IV):** Implemented Weight of Evidence (WOE) and Information Value (IV) analysis to interpret categorical variables strictly through their predictive power, standardizing risk signals.
-* **Unsupervised Learning & Anomaly Detection:**
-  * **PCA Factor Loadings:** Dimensionality reduction to uncover latent "borrower personas".
-  * **Isolation Forest:** Proactive anomaly detection to identify and flag outliers before they skew the model.
-* **State-of-the-Art Modeling & Ensembling:** 
-  * Baseline Logistic Regression vs. optimized LightGBM (via Optuna).
-  * **Soft Voting Ensemble:** Combining the interpretability of linear models with the non-linear predictive power of tree-based models.
-* **Financial Threshold Optimization:** Moved beyond standard ML metrics (AUC, F1) to optimize the classification threshold directly for **Net Expected Profit**, maximizing ROI for the lending institution.
-* **Explainable AI (XAI):** Integrated SHAP (SHapley Additive exPlanations) values to provide deep interpretability into the drivers of default, down to the individual borrower level.
-* **Deep Error Analysis:** Targeted investigation into False Negatives (high-risk borrowers who "looked good on paper") to understand model blind spots.
+This repository contains a comprehensive Data Science project predicting loan defaults using the Lending Club dataset. The current phase of the project focuses heavily on robust data preparation, strict prevention of data leakage, and advanced feature engineering designed for production-level ML architectures.
 
 ## 📁 Repository Structure
+* `Lending_Club_Project_Semifinal.ipynb`: The main Jupyter Notebook containing the pipeline.
+* `Lending_Club_Project_Final.py`: The core Python script that powers the notebook.
+* `/eda_plots`, `/fe_plots`: Directories containing high-resolution visual outputs of our data analysis.
 
-* `Lending_Club_Project.ipynb`: The main Jupyter Notebook containing the full pipeline, from EDA to Model Deployment considerations.
-* `Lending_Club_Project.html`: Exported HTML version of the notebook for easy viewing in the browser.
-* `model_results.json`: Cached evaluation metrics and financial projections.
-* `/eda_plots`, `/fe_plots`, `/model_plots`: Saved high-resolution visualizations from the analysis (SHAP, Calibration curves, colinearity heatmaps, etc.).
+## 🌟 Project Pipeline
 
-## 🚀 Getting Started
+### 1. Data Loading & Sub-Grade Encoding
+We ingest the raw dataset and explicitly encode the `sub_grade` feature. While assigned by Lending Club, it is evaluated strictly *pre-origination*, meaning it does not constitute data leakage. We convert this ordinal string (e.g., 'A1', 'G5') into an integer scale (1-35) to give the model a powerful baseline risk proxy.
 
-To run the notebook locally:
-1. Clone this repository.
-2. Ensure you have Python installed, along with libraries: `pandas`, `polars`, `scikit-learn`, `lightgbm`, `optuna`, `shap`, `seaborn`, `matplotlib`.
-3. Open `Lending_Club_Project.ipynb` in Jupyter Notebook or VS Code.
+### 2. Data Quality & Cleaning (Leakage Audit)
+We perform a rigorous two-round audit to eliminate **Data Leakage**:
+* **Round 1 (Post-Origination):** Removed columns detailing post-funding events such as `total_pymnt`, `recoveries`, and `settlement_status`.
+* **Round 2 (Implicit Proxies):** Removed columns identified through domain research as implicit post-origination trackers, such as `funded_amnt` and `chargeoff_within_12_mths`.
 
-## 📈 Results summary
+We also drop columns with >75% missing data, constant columns (like `policy_code`), and free-text NLP inputs that are outside the scope of tabular analysis.
 
-The final Ensemble model successfully isolates high-risk loans, dramatically increasing the theoretical net profit compared to the baseline approval strategy. By leveraging Threshold Optimization, the model strategically balances risk and reward, proving the immense business value of advanced data science in the credit domain.
+### 3. Exploratory Data Analysis (EDA)
+We conduct deep statistical analysis to uncover the drivers of default:
+* **Out-of-Time (OOT) Split:** We enforce chronological integrity by splitting chronologically to simulate real-world deployment.
+* **Univariate & Bivariate Analysis:** We map out density distributions, calculate Weight of Evidence (WOE), and map Information Value (IV) across key features.
+* **Multicollinearity Audit:** Evaluated Pearson correlations and dropped highly collinear redundant variables.
+* **K-Means Borrower Personas:** Clustered borrowers into three distinct profiles ("Prime/Safe", "High Exposure", and "Highly Leveraged/Strained") using a 6D financial feature space mapped via PCA.
+
+### 4. Advanced Feature Engineering
+We transform raw signals into ML-ready inputs, ensuring fairness across different model architectures:
+* **Domain Financial Features:** Created powerful ratio interactions such as `adjusted_dti` (debt-to-income factoring in revolving utilization) and `installment_to_income`.
+* **Recency Transformation:** Resolved structural missingness in temporal columns (e.g., `mths_since_last_delinq`). Instead of arbitrary high scalars (e.g., `999`), we applied `1 / (x + 1)`, imputing NULLs (events that never happened) to exactly `0.0` for linear stability.
+* **Heavy-Tailed Log Capping:** Computed P99 thresholds to cap extreme financial outliers (like $10M incomes) and applied `.log1p()`. This prevents extreme gradients in distance-based algorithms, allowing us to build explicit `tree_features` and `linear_features` lists.
+
+---
+עד כאן הפרוייקט מוכן

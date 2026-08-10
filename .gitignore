@@ -2,6 +2,5 @@ venv/
 .env
 __pycache__/
 *.csv
+*.parquet
 .ipynb_checkpoints/
-cleaner.py
-convert.py
