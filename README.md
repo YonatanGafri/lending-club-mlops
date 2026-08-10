@@ -1,12 +1,10 @@
-# Lending Club Credit Risk Modeling 🏦📊
+# Lending Club - ML Project 🏦📊
 
 This repository contains a comprehensive Data Science project predicting loan defaults using the Lending Club dataset. The current phase of the project focuses heavily on robust data preparation, strict prevention of data leakage, and advanced feature engineering designed for production-level ML architectures.
 
 ## 📁 Repository Structure
 * `Lending_Club_Project_Semifinal.ipynb`: The main Jupyter Notebook containing the pipeline.
 * `Lending_Club_Project_Final.py`: The core Python script that powers the notebook.
-* `/eda_plots`, `/fe_plots`: Directories containing high-resolution visual outputs of our data analysis.
-
 ## 🌟 Project Pipeline
 
 ### 1. Data Loading & Sub-Grade Encoding

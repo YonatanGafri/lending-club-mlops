@@ -4,3 +4,7 @@ __pycache__/
 *.csv
 *.parquet
 .ipynb_checkpoints/
+.agents/
+eda_plots/
+fe_plots/
+model_plots/
