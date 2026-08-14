@@ -1632,36 +1632,103 @@ else:
 # 
 # The resulting AUC of 0.7272 represents an academically rigorous, mathematically sound evaluation of the borrower's default risk based purely on raw, pre-origination data.
 
-# ## 8. Reflective Thinking & Future Work
-# 
-# As with any real-world Data Science project, it is crucial to reflect on the limitations of our approach and the data itself:
-# 
-# ### Data Limitations & Biases
-# 1. **Survival Bias (Reject Inference):** Our model is trained exclusively on *accepted* loans. We have a massive 1.7GB dataset of rejected loans that we did not use for training because we lack their true labels. This creates a survival bias, as our model only knows how to score 'good enough' applicants. In an advanced industry setting, we would apply **Reject Inference** (e.g., Fuzzy Augmentation) to estimate their performance and refine our thresholds.
-# 2. **Temporal Bias:** The macroeconomic environment shifts constantly. A model trained on 2012-2016 data might fail catastrophically during an economic recession. While we used Out-of-Time (OOT) validation to simulate this, real-world models require constant monitoring (e.g., Population Stability Index - PSI) to detect data drift.
-# 3. **Confounding Variables:** We discovered that 'Verified' income actually correlates with *higher* defaults. This is a classic confounding issue: Lending Club only demands income verification for the riskiest, highest-loan-amount borrowers.
-# 
-# ### What we would do differently given more time
-# *   **Hyperparameter Tuning:** Dedicate more compute to Optuna for LightGBM tuning.
-# *   **Ensembling:** Combine Logistic Regression (good for interpretability) and LightGBM (good for non-linear interactions) using stacking.
-# *   **Explainability:** Deploy a Dash/Streamlit interactive app allowing underwriters to input a loan application and get a live SHAP waterfall plot.
+# ==============================================================================
+# 10. Production Decision Engine & End-to-End Simulation
+# ==============================================================================
+import pandas as pd
+import numpy as np
 
-# ## 9. Summary & Discussion
-# 
-# In this project, we conducted a comprehensive credit risk analysis using the Lending Club dataset. We went far beyond standard accuracy metrics to build a robust, business-oriented Machine Learning pipeline.
-# 
-# **Key Achievements & Methodological Highlights:**
-# 1. **Preventing Time-Travel (Leakage):** By utilizing an **Out-Of-Time (OOT)** split, we ensured our model was evaluated on strictly future loans (post-2015), mimicking real-world deployment.
-# 2. **Business Optimization over Pure Math:** Instead of relying on ROC-AUC alone, we built a **Cost-Benefit Matrix** that aligned the model's threshold with the actual financial reality of loan defaults versus safe returns, finding a threshold that maximizes profit.
-# 3. **Advanced Signal Extraction:** 
-#    - We proved that **Structural Missingness** (e.g., missing employment length) is not noise, but a critical risk signal.
-#    - We utilized **Isolation Forest** to flag anomalies, demonstrating that unusual applications carry inherently different default risks.
-# 4. **Transparent & Interpretable AI:** We demystified the 'black box' by employing **SHAP** feature importance, explaining precisely why the LightGBM model makes its decisions (e.g., the heavy penalty on high DTI combined with low FICO).
-# 5. **Model Robustness:** We experimented with Soft Voting Ensembles and proved that forcing a linear baseline onto a non-linear tree model degraded top-line performance, reinforcing our decision to deploy LightGBM as a standalone engine.
-# 6. **PCA Factor Loadings:** We explicitly extracted the factor loadings from our PCA components, verifying that Component 1 mathematically represents 'Financial Stability' (driven by Income) and Component 2 represents 'Loan Scale'.
-# 
-# **Final Thoughts:**
-# This pipeline successfully transforms raw, imbalanced financial data into actionable, interpretable business intelligence, ready for deployment in a modern credit risk department.
+def credit_decision_engine(applicant: dict) -> dict:
+    """
+    Automated Real-Time Credit Underwriting, Pricing & Persona Assignment Service.
+    """
+    loan_amnt   = applicant.get('loan_amnt', 10000)
+    annual_inc  = max(applicant.get('total_annual_inc', 50000), 1)
+    installment = applicant.get('installment', (loan_amnt * 1.15) / applicant.get('term_num', 36))
+    
+    inst_to_inc = (installment * 12) / annual_inc
+    loan_to_inc = loan_amnt / annual_inc
+    adj_dti     = applicant.get('total_dti', 20.0) + (applicant.get('revol_util', 50.0) * 0.1)
+    
+    fico = applicant.get('fico_range_low', 680)
+    dti = applicant.get('total_dti', 20.0)
+    
+    if fico >= 740 and annual_inc >= 90000:
+        assigned_persona = "Persona 1: Prime High-Earner"
+    elif fico >= 690 and dti < 20.0:
+        assigned_persona = "Persona 2: Mid-Income Conservative"
+    elif dti >= 28.0 or fico < 660:
+        assigned_persona = "Persona 3: Debt-Stressed High-Leverage"
+    else:
+        assigned_persona = "Persona 4: Baseline Revolving Borrower"
+
+    feat_dict = {
+        'loan_amnt': loan_amnt,
+        'total_annual_inc': annual_inc,
+        'total_dti': dti,
+        'revol_util': applicant.get('revol_util', 50.0),
+        'fico_range_low': fico,
+        'adjusted_dti': adj_dti,
+        'installment_to_income': inst_to_inc,
+        'loan_to_income': loan_to_inc,
+        'estimated_revol_limit': applicant.get('estimated_revol_limit', 15000),
+        'emp_length_num': applicant.get('emp_length_num', 5),
+        'emp_length_missing': applicant.get('emp_length_missing', 0),
+        'term_num': applicant.get('term_num', 36),
+        'purpose': applicant.get('purpose', 'debt_consolidation'),
+        'home_ownership': applicant.get('home_ownership', 'RENT'),
+        'verification_status': applicant.get('verification_status', 'Source Verified'),
+        'borrower_persona': assigned_persona.split(':')[0],
+        'is_anomaly': 1 if (loan_amnt > 35000 or annual_inc > 250000 or dti > 45) else 0
+    }
+    
+    df_app = pd.DataFrame([feat_dict])
+    
+    cat_cols = ['purpose', 'home_ownership', 'verification_status', 'borrower_persona']
+    for c in cat_cols:
+        if c in df_app.columns:
+            df_app[c] = df_app[c].astype('category')
+            
+    if 'sub_grade_num' in applicant:
+        df_app['sub_grade_num'] = applicant['sub_grade_num']
+        raw_prob = ensemble_model.predict_proba(df_app)[:, 1][0]
+        calib_prob = float(iso_ens.predict([raw_prob])[0])
+        model_used = "Champion Ensemble Model (Our Features + LC Grade)"
+        cutoff = 0.20
+    else:
+        raw_prob = best_lgb_model.predict_proba(df_app)[:, 1][0]
+        calib_prob = float(iso_calibrator.predict([raw_prob])[0])
+        model_used = "In-House Purist Model (Independent Underwriter)"
+        cutoff = 0.21
+        
+    is_approved = calib_prob < cutoff
+    decision = "APPROVED \u2705" if is_approved else "REJECTED \u274c"
+    rec_interest_rate = 5.5 + (calib_prob * 25.0)
+    
+    adverse_reasons = []
+    if not is_approved:
+        if feat_dict['term_num'] == 60:
+            adverse_reasons.append("Extended loan duration (60 months)")
+        if inst_to_inc > 0.10:
+            adverse_reasons.append(f"High monthly payment-to-income ratio ({inst_to_inc:.1%})")
+        if adj_dti > 30.0:
+            adverse_reasons.append(f"Elevated debt burden & utilization ({adj_dti:.1f}%)")
+        if feat_dict['fico_range_low'] < 680:
+            adverse_reasons.append(f"Sub-prime credit score ({feat_dict['fico_range_low']})")
+        if not adverse_reasons:
+            adverse_reasons.append("High overall portfolio default risk score")
+
+    return {
+        "Applicant Name": applicant.get("name", "Applicant"),
+        "Assigned Persona": assigned_persona,
+        "Anomaly Detected": "YES \u26a0\ufe0f" if feat_dict['is_anomaly'] == 1 else "NO (Normal Profile)",
+        "System Decision": decision,
+        "Calibrated Default Risk": f"{calib_prob:.1%}",
+        "Optimal Decision Cutoff": f"{cutoff:.2f}",
+        "Recommended Interest Rate": f"{rec_interest_rate:.2f}%" if is_approved else "N/A (Loan Denied)",
+        "Underwriting Model Used": model_used,
+        "Adverse Action Reasons": adverse_reasons if not is_approved else "None (Applicant Approved)"
+    }
 # 
 # 
 
