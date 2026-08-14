@@ -8,3 +8,6 @@ __pycache__/
 eda_plots/
 fe_plots/
 model_plots/
+*.joblib
+scratch/
+

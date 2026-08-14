@@ -49,17 +49,21 @@ display(df.head().to_pandas().T)
 # ### Discussion: To Use or Not to Use Lending Club's Grade?
 # 
 # Right after loading the dataset, we notice columns like `grade` and `sub_grade`. These are risk assessments calculated and assigned to borrowers by Lending Club themselves.
-# This raises a fundamental question: **Should we even use their grade as a feature in our model? Isn't it essentially "cheating" or copying someone else's homework?**
+# This raises a fundamental question: **Should we use their proprietary grade as a feature in our model, or build an independent underwriting engine?**
 # 
-# This is a classic dilemma in Data Science, and there are two valid approaches:
+# This is a classic dilemma in financial Data Science with two distinct methodological paradigms:
 # 
-# 1. **The Purist Approach (Excluding the Grade):**
-# If we drop their grade, our model will have to learn from scratch based purely on the raw features (salary, employment length, loan amount, etc.). The advantage? It proves the true predictive power of our algorithm.
+# 1. **The Purist Approach (Independent In-House Engine):**
+# If we exclude their grade, our model must learn to price risk from scratch based strictly on the applicant's fundamental attributes (FICO, DTI, income, employment tenure, etc.). The advantage? It proves the true predictive power of our feature engineering and algorithms without relying on a third-party black box.
 # 
-# 2. **The Ensemble Approach (Including the Grade):**
-# Lending Club's grade encapsulates a massive amount of financial expertise and potentially even proprietary data (like hard credit pulls) that we don't have in this public dataset. Using their grade as an input feature is akin to taking an expert's baseline opinion, and then using our advanced model to find out *where the expert made a mistake*.
+# 2. **The Ensemble Approach (Augmented Platform Investor):**
+# Lending Club's grade encapsulates institutional expertise and proprietary credit bureau pulls not present in this public dataset. Using their grade alongside our engineered features allows our model to act as an "augmented auditor" — evaluating an expert's baseline opinion to discover *where the legacy rating made a mistake*.
 # 
-# **Our Decision:** Since `sub_grade` is assigned strictly pre-origination, it is **NOT leakage**. It is a powerful proxy for creditworthiness, so we keep it as a feature and encode it ordinally (A1=1, G5=35).
+# **Our Scientific Roadmap:**
+# To resolve this dilemma empirically, we adopt a rigorous **two-stage evaluation strategy**:
+# * **Phase 1 (Primary Modeling & Benchmarking):** We strictly train all candidate models on the **Purist feature universe** (excluding `sub_grade`), proving our ability to build a standalone, market-leading underwriting engine.
+# * **Phase 2 (Architectural Showdown):** In Chapter 8, we conduct an explicit head-to-head showdown comparing **(1) Lending Club's grade alone**, **(2) Our In-House Purist model**, and **(3) The Ensemble model (Our features + `sub_grade`)** to quantify the exact incremental lift.
+
 
 # ## 2. Data Quality & Cleaning Pipeline
 # 
@@ -320,9 +324,10 @@ plt.show()
 # ### Answers to Business Questions:
 # 1. **Term Length:** 60-month loans have a significantly higher default rate. This may be due to longer exposure time (more chances for life events like job loss), or it may reflect that borrowers requiring longer terms to afford payments are inherently riskier at origination.
 # 2. **Interest Rate:** It is both a symptom and a cause. Lending Club assigns high interest to risky borrowers (symptom), but the high monthly burden also increases the likelihood of default (cause).
-# 3. **Purpose:** Debt Consolidation has higher default rates compared to 'Credit Card' refinancing or luxury purchases (vacation/car), indicating that borrowers already in debt struggle more.
+# 3. **Purpose:** Debt Consolidation and distress funding (19.2%) have higher default rates compared to lifestyle and asset purchases (15.3%), while Small Business loans carry the highest default risk (26.6%), confirming that existing debt burden and commercial ventures significantly elevate credit risk.
 # 4. **Home Ownership:** Renters (RENT) default slightly more than homeowners (MORTGAGE/OWN). Renters generally have lower financial stability.
-# 5. **Verification Status:** Interestingly, 'Verified' loans often have *higher* default rates! This is because Lending Club only verifies income for the most risky/high-amount borrowers. This is a classic confounding variable.
+# 5. **Verification Status:** Interestingly, 'Verified' loans often have *higher* default rates (~20%) than 'Not Verified' loans (~13%)! This is because Lending Club only demands income verification for the riskiest, high-loan-amount borrowers — a classic confounding variable.
+
 # 
 
 # ### 3.4 Sub-Grade Monotonicity & Credit Risk EDA
@@ -1293,6 +1298,28 @@ X_test_linear_scaled = scaler.transform(X_test_lin_clean)
 print("Scaling complete:")
 print(f"  X_train_tree shape:          {X_train_tree.shape}")
 print(f"  X_train_linear_scaled shape: {X_train_linear_scaled.shape}")
+
+# --- 5.5 Save Chapter 5 Datasets for Fast Modeling Recovery ---
+import joblib
+
+print("\n--- Saving Chapter 5 Partitioned Datasets (Checkpoints) ---")
+ch5_checkpoint = {
+    'X_train_tree': X_train_tree,
+    'y_train': y_train,
+    'X_val_tree': X_val_tree,
+    'y_val': y_val,
+    'X_test_tree': X_test_tree,
+    'y_test': y_test,
+    'X_train_linear_scaled': X_train_linear_scaled,
+    'X_val_linear_scaled': X_val_linear_scaled,
+    'X_test_linear_scaled': X_test_linear_scaled,
+    'linear_feature_names': list(X_train_lin_clean.columns),
+    'tree_features': tree_features
+}
+
+joblib.dump(ch5_checkpoint, 'chapter5_modeling_data.joblib', compress=3)
+print("Successfully saved 'chapter5_modeling_data.joblib'!")
+
 
 
 
