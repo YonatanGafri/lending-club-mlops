@@ -694,6 +694,27 @@ X_pca = pca.fit_transform(X_scaled)
 df_unsup['PC1'] = X_pca[:, 0]
 df_unsup['PC2'] = X_pca[:, 1]
 
+# 1.5 Calculate & Visualize PCA Explained Variance
+explained_var_ratio = pca.explained_variance_ratio_.sum()
+print(f"Total Explained Variance by 2 Principal Components: {explained_var_ratio*100:.2f}%")
+
+plt.figure(figsize=(8, 5))
+plt.bar(['Original 6D Space (100%)', 'PCA 2D Projection'], 
+        [1.0, explained_var_ratio], 
+        color=['#d3d3d3', '#2c3e50'])
+plt.title('Retained Variance after PCA Dimensionality Reduction')
+plt.ylabel('Proportion of Total Variance')
+plt.ylim(0, 1.1)
+
+for i, v in enumerate([1.0, explained_var_ratio]):
+    plt.text(i, v + 0.02, f"{v*100:.1f}%", ha='center', fontweight='bold', fontsize=12)
+
+plt.tight_layout()
+os.makedirs('model_plots', exist_ok=True)
+plt.savefig('model_plots/pca_variance_retention.png')
+plt.show()
+
+
 # 2. Calculate default rates per cluster to dynamically rank them by risk
 cluster_default_rates = df_unsup.groupby('Cluster')['target'].mean().sort_values()
 
@@ -1062,127 +1083,218 @@ for col in heavy_cols_linear:
 print(f"Created log-capped features for linear models: {[f'{c}_log_capped' for c in heavy_cols_linear]}")
 
 
-# ## 6. Modeling
-# 
-# We run the full modeling pipeline from the saved feature-engineered parquet files.
-# Results are pre-computed in `modeling.py` and saved to `model_results.json`.
-# 
-# ### 6.1 Load Results
+# %% [markdown]
+"""
+### 4.6 Multidimensional Anomaly Detection (Isolation Forest)
 
-# ### 6.2 Visualizations
-# 
-# Load pre-generated model plots:
+In credit risk modeling, outlier borrowers (e.g., extremely high income, unusual debt-to-income combinations, or disproportionate revolving balances) often exhibit non-standard repayment behaviors.
 
-# In[19]:
-
-
-from IPython.display import Image, display
-
-# Model comparison (ROC + PR curves)
-print('Model Comparison: ROC & PR Curves')
-display(Image(filename='model_plots/model_comparison.png', width=900))
-
-
-# **Model Comparison Insight:** The ROC curves clearly demonstrate LightGBM's strong predictive capability across all decision thresholds.
-
-# To translate probabilities into hard predictions, we optimize the decision threshold by maximizing the F1-Score.
-
-# In[20]:
-
-
-# Threshold Optimization
-print('Threshold Optimization Analysis')
-display(Image(filename='model_plots/threshold_optimization.png', width=900))
-
-
-# **Threshold Optimization Insight:** By shifting the decision threshold from the default 0.50 down to the optimal point, we correctly identify more potential defaults, drastically increasing the net expected profit from the portfolio.
-
-# A good model not only ranks risks well but outputs reliable probabilities. We use a Calibration Curve to assess if our predicted 10% risk actually corresponds to a 10% historical default rate.
+#### The Strategic Dilemma & Solution:
+1. **Linear Model Protection:** In Section 4.5, we applied P99 capping to prevent extreme values from distorting distance-based and linear models (e.g., Logistic Regression, Neural Networks).
+2. **Signal Preservation via Anomaly Flag:** Truncating extreme values risks erasing the informational value of being an outlier. By training an **Isolation Forest**, we isolate atypical multidimensional profiles and assign a binary indicator (`is_anomaly`).
+3. **Leakage-Free Implementation:** The Isolation Forest is fitted strictly on the **Training Set** (`train_df`) and subsequently applied to both Train and Test partitions, ensuring zero temporal leakage.
+4. **Downstream Integration:** The resulting `is_anomaly` flag is included in `tree_features`, allowing non-linear tree ensembles (e.g., LightGBM, XGBoost) to dynamically adjust risk scores for anomalous applicants without destabilizing linear pipelines.
+"""
 
 # In[21]:
 
+from sklearn.ensemble import IsolationForest
+import pandas as pd
+import polars as pl
 
-# Probability Calibration
-print('Probability Calibration: Before vs After')
-display(Image(filename='model_plots/calibration_curves.png', width=900))
+print("--- 4.6 Training Isolation Forest on Training Set ---")
+iso_candidate_features = [
+    'loan_amnt', 'total_annual_inc', 'total_dti', 'revol_util', 
+    'revol_bal', 'fico_range_low', 'adjusted_dti', 'installment_to_income'
+]
+iso_features = [f for f in iso_candidate_features if f in train_df.columns]
+
+# Extract to pandas and impute with train medians for Isolation Forest
+iso_medians = train_df.select(iso_features).to_pandas().median()
+train_iso_df = train_df.select(iso_features).to_pandas().fillna(iso_medians)
+test_iso_df = test_df.select(iso_features).to_pandas().fillna(iso_medians)
+
+# Fit on training data only to strictly prevent temporal leakage
+iso_forest = IsolationForest(random_state=42, contamination=0.05, n_jobs=-1)
+iso_forest.fit(train_iso_df)
+
+train_anomaly_preds = iso_forest.predict(train_iso_df)
+test_anomaly_preds = iso_forest.predict(test_iso_df)
+
+# Convert -1 (anomaly) to 1, and 1 (normal) to 0
+train_is_anomaly = (train_anomaly_preds == -1).astype(int)
+test_is_anomaly = (test_anomaly_preds == -1).astype(int)
+
+train_df = train_df.with_columns(pl.Series("is_anomaly", train_is_anomaly))
+test_df = test_df.with_columns(pl.Series("is_anomaly", test_is_anomaly))
+
+print(f"Train Anomalies detected: {train_is_anomaly.sum():,} ({train_is_anomaly.mean()*100:.2f}%)")
+print(f"Test Anomalies detected:  {test_is_anomaly.sum():,} ({test_is_anomaly.mean()*100:.2f}%)")
+
+# Compare default rates
+train_pd_anomaly = train_df.select(['is_anomaly', 'target']).to_pandas()
+print("\nDefault Rate by Anomaly Status (Train Set):")
+display_anomaly_summary = train_pd_anomaly.groupby('is_anomaly')['target'].agg(['count', 'mean']).rename(columns={'mean': 'Default_Rate'})
+print(display_anomaly_summary)
+
+# 4.7 Save Processed Feature Datasets as Checkpoints
+print("\n--- Saving Processed Datasets (Checkpoints) ---")
+train_df.write_parquet('train_engineered.parquet')
+test_df.write_parquet('test_engineered.parquet')
+print("Successfully saved 'train_engineered.parquet' and 'test_engineered.parquet'!")
 
 
-# **Calibration Insight:** The calibration curve shows that our predicted probabilities closely hug the perfectly calibrated diagonal line, meaning a predicted 20% risk corresponds to a true 20% default rate in the real world.
 
-# To break open the 'black box' of our LightGBM model, we use SHAP (SHapley Additive exPlanations) values to understand the global drivers of default risk.
+
+# ## 5. Supervised Modeling: Train/Validation/Test Split & Scaling
+# 
+# %% [markdown]
+"""
+## 5. Supervised Modeling: Train / Validation / Test Split & Leakage-Free Scaling
+
+Having concluded our rigorous Feature Engineering, we establish our evaluation partitions:
+1. **Chronological OOT Partitioning:** We split our training records into Train (80%) for model training and Validation (20%) for hyperparameter tuning and threshold optimization. The held-out Test set remains strictly untouched for final evaluation.
+2. **Feature Set Bifurcation:**
+   * `tree_features`: Raw, non-linear signals with native categorical features for Tree ensembles (LightGBM, XGBoost, Random Forest).
+   * `linear_features`: One-hot encoded and standardized inputs for Linear and Deep Learning architectures (Logistic Regression, MLP).
+3. **Leakage-Free Scaling:** `StandardScaler` is fitted strictly on the Train partition, then applied via `.transform()` to Validation and Test.
+"""
 
 # In[22]:
 
-
-# SHAP Feature Importance
-print('SHAP Feature Importance (Beeswarm)')
-display(Image(filename='model_plots/shap_beeswarm.png', width=700))
-
-
-# **SHAP Beeswarm Insight:** The beeswarm plot above reveals the *directionality* of impact: for example, lower FICO scores (blue dots) strongly push the prediction toward higher risk (positive SHAP values). Now, let's look at the average absolute impact of each feature to see the overall importance ranking.
-
-# In[23]:
-
-
-print('SHAP Feature Importance (Bar)')
-display(Image(filename='model_plots/shap_importance.png', width=700))
-
-
-# **Key Insight — Model Drivers:** The SHAP summary clearly shows that `fico_range_low` and `dti` (Debt-to-Income) are the most dominant predictors. Furthermore, the non-linear interaction (e.g., high DTI combined with low FICO) heavily drives the model's risk penalty, showcasing why LightGBM outperforms simple linear models.
-
-# ### 6.2.1 Walk-Forward Cross-Validation (TimeSeriesSplit)
-# 
-# A common question in model evaluation is: **"How stable are these results across different data splits?"** — this is typically answered with Cross-Validation (CV).
-# 
-# However, our data is **chronologically ordered**. Using standard K-Fold CV would shuffle the rows, causing the model to train on 2017 data and predict 2012 data — a clear **temporal leakage** that violates our Out-of-Time (OOT) methodology.
-# 
-# **Solution:** We use `TimeSeriesSplit` (Walk-Forward Validation), which respects the timeline:
-# *   Fold 1: Train on months 1-20%, validate on 20-40%
-# *   Fold 2: Train on months 1-40%, validate on 40-60%
-# *   ...and so on.
-# 
-# > **Important Trade-off:** In early folds, the training set is very small, which hurts performance. This is expected behavior — it actually validates that our original 80/20 OOT split (which maximizes training data) is the superior approach for production deployment. The TimeSeriesSplit here serves purely to demonstrate **model stability** over time.
-
-# In[24]:
-
-
-# --- 6.2.1: Walk-Forward Cross-Validation ---
-from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import roc_auc_score
-import lightgbm as lgb
+import polars as pl
 import pandas as pd
-import matplotlib.pyplot as plt
-import os
-os.makedirs('model_plots', exist_ok=True)
+import numpy as np
+from sklearn.preprocessing import StandardScaler
 
-# Generate X_train and y_train directly from train_df since they are not in pandas yet
+# --- 5.1 Define Feature Universes ---
 tree_features = [
     "loan_amnt", "total_annual_inc", "total_dti", "revol_util", 
     "fico_range_low", "adjusted_dti", "installment_to_income", 
     "loan_to_income", "estimated_revol_limit", "emp_length_num", 
     "emp_length_missing", "term_num", "purpose", "home_ownership", "verification_status",
-    "borrower_persona"
+    "borrower_persona", "is_anomaly"
 ]
 
-# For linear models, swap out raw heavy-tailed features for log-capped versions
+heavy_cols_linear = ['revol_bal', 'loan_amnt', 'total_annual_inc', 'avg_cur_bal', 'tot_cur_bal']
 linear_features = tree_features.copy()
 for hc in heavy_cols_linear:
     if hc in linear_features:
         linear_features.remove(hc)
         linear_features.append(f"{hc}_log_capped")
 
-# NOTE: For this benchmark with LightGBM, we use tree_features. 
-# Downstream linear pipelines should reference linear_features.
-X_train = train_df.select(tree_features).to_pandas()
-y_train = train_df.select("target").to_pandas()["target"]
-X_test = test_df.select(tree_features).to_pandas()
+# --- 5.2 Chronological Train / Validation Split ---
+n_train_total = len(train_df)
+val_split_idx = int(n_train_total * 0.8)
+
+train_part = train_df.slice(0, val_split_idx)
+val_part = train_df.slice(val_split_idx, n_train_total - val_split_idx)
+
+print(f"Train Partition (80%):      {train_part.shape[0]:,} rows")
+print(f"Validation Partition (20%): {val_part.shape[0]:,} rows")
+print(f"Test Partition (Held-out):  {test_df.shape[0]:,} rows")
+
+# --- 5.3 Datasets for Tree-Based Models ---
+X_train_tree = train_part.select(tree_features).to_pandas()
+y_train = train_part.select("target").to_pandas()["target"]
+
+X_val_tree = val_part.select(tree_features).to_pandas()
+y_val = val_part.select("target").to_pandas()["target"]
+
+X_test_tree = test_df.select(tree_features).to_pandas()
 y_test = test_df.select("target").to_pandas()["target"]
 
+# Format categorical columns for LightGBM
 cat_cols = ["purpose", "home_ownership", "verification_status", "borrower_persona"]
 for col in cat_cols:
-    if col in X_train.columns:
-        X_train[col] = X_train[col].astype('category')
-        X_test[col] = X_test[col].astype('category')
+    if col in X_train_tree.columns:
+        X_train_tree[col] = X_train_tree[col].astype('category')
+        X_val_tree[col] = X_val_tree[col].astype('category')
+        X_test_tree[col] = X_test_tree[col].astype('category')
+
+# Legacy aliases for compatibility with existing cells
+X_train = X_train_tree
+X_test = X_test_tree
+
+# --- 5.4 Domain Categorical Consolidation & Scaling for Linear / Neural Models ---
+print("\nPreparing Consolidated Features for Linear Models & Neural Networks...")
+
+def consolidate_categoricals(df_pd):
+    df_out = df_pd.copy()
+    
+    # 1. Map Verification Status to a Single Binary Indicator (1 = Verified/Source Verified, 0 = Not Verified)
+    if 'verification_status' in df_out.columns:
+        df_out['is_verified'] = df_out['verification_status'].apply(
+            lambda x: 0 if str(x).strip() == 'Not Verified' else 1
+        )
+        df_out.drop(columns=['verification_status'], inplace=True)
+        
+    # 2. Group Purpose by Empirical Risk Tiers
+    purpose_map = {
+        'small_business': 'high_risk_business',
+        'debt_consolidation': 'debt_distress',
+        'moving': 'debt_distress',
+        'house': 'debt_distress',
+        'medical': 'debt_distress',
+        'other': 'debt_distress',
+        'renewable_energy': 'debt_distress',
+        'educational': 'lifestyle_asset',
+        'vacation': 'lifestyle_asset',
+        'credit_card': 'lifestyle_asset',
+        'home_improvement': 'lifestyle_asset',
+        'major_purchase': 'lifestyle_asset',
+        'car': 'lifestyle_asset',
+        'wedding': 'lifestyle_asset'
+    }
+    if 'purpose' in df_out.columns:
+        df_out['purpose_group'] = df_out['purpose'].map(purpose_map).fillna('debt_distress')
+        df_out.drop(columns=['purpose'], inplace=True)
+        
+    # 3. Consolidate Home Ownership to 3 Macro Categories
+    home_map = {
+        'MORTGAGE': 'MORTGAGE',
+        'RENT': 'RENT',
+        'OWN': 'OWN'
+    }
+    if 'home_ownership' in df_out.columns:
+        df_out['home_ownership_group'] = df_out['home_ownership'].map(home_map).fillna('RENT')
+        df_out.drop(columns=['home_ownership'], inplace=True)
+        
+    return df_out
+
+# Apply domain consolidation
+train_lin_df = consolidate_categoricals(train_part.select(linear_features).to_pandas())
+val_lin_df = consolidate_categoricals(val_part.select(linear_features).to_pandas())
+test_lin_df = consolidate_categoricals(test_df.select(linear_features).to_pandas())
+
+# Identify new categorical columns for One-Hot Encoding
+linear_cat_cols = ['purpose_group', 'home_ownership_group', 'borrower_persona']
+
+X_train_lin_raw = pd.get_dummies(train_lin_df, columns=linear_cat_cols, drop_first=True)
+X_val_lin_raw = pd.get_dummies(val_lin_df, columns=linear_cat_cols, drop_first=True)
+X_test_lin_raw = pd.get_dummies(test_lin_df, columns=linear_cat_cols, drop_first=True)
+
+# Align columns across partitions
+X_train_lin_raw, X_val_lin_raw = X_train_lin_raw.align(X_val_lin_raw, join='left', axis=1, fill_value=0)
+X_train_lin_raw, X_test_lin_raw = X_train_lin_raw.align(X_test_lin_raw, join='left', axis=1, fill_value=0)
+
+# Impute missing values with Train median only
+lin_medians = X_train_lin_raw.median()
+X_train_lin_clean = X_train_lin_raw.fillna(lin_medians)
+X_val_lin_clean = X_val_lin_raw.fillna(lin_medians)
+X_test_lin_clean = X_test_lin_raw.fillna(lin_medians)
+
+# Fit StandardScaler strictly on Train
+scaler = StandardScaler()
+X_train_linear_scaled = scaler.fit_transform(X_train_lin_clean)
+X_val_linear_scaled = scaler.transform(X_val_lin_clean)
+X_test_linear_scaled = scaler.transform(X_test_lin_clean)
+
+print("Scaling complete:")
+print(f"  X_train_tree shape:          {X_train_tree.shape}")
+print(f"  X_train_linear_scaled shape: {X_train_linear_scaled.shape}")
+
+
 
 
 import optuna
