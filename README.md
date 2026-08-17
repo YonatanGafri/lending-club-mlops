@@ -66,8 +66,11 @@ Evaluated 5 distinct architectures under regularized conditions:
 * **In-House Purist Model:** $0.7287$ Test ROC-AUC ($\$130.90\text{M}$ profit, **$+\$6.55\text{M}$ lift**)
 * **Combined Ensemble Model:** $\mathbf{0.7363}$ Test ROC-AUC ($\$134.88\text{M}$ profit, **$+\$10.53\text{M}$ lift**)
 
-### 9. Production Decision Engine (`credit_decision_engine`)
-Operationalized a real-time underwriting function that consumes raw applicant JSON payloads, dynamically computes engineered ratios, maps borrower personas, verifies anomalies, applies optimal cutoffs, and returns risk-based interest rates and FCRA denial reasons.
+### 9. Production Decision Engine & Interactive Dashboards (`credit_decision_engine`)
+* **Automated Real-Time Decision Service:** Real-time underwriting function that consumes raw applicant JSON payloads, dynamically computes engineered ratios, maps borrower personas, verifies anomalies, applies optimal cutoffs, and returns risk-based interest rates and FCRA denial reasons.
+* **Interactive Financial Impact Dashboard (Jupyter Widget):** Real-time threshold tuner computing Net Expected Profit, Confusion Matrix, Approval Rates, and Default Rates dynamically on slider updates.
+* **Interactive Precision-Recall Trade-Off Tracing:** Live moving-dot PR curve tracer mapping exact Precision and Recall coordinates across decision boundaries.
+* **Rigorous Anchor-Linked Navigation:** Comprehensive 11-chapter interactive Table of Contents for seamless codebase navigation.
 
 ---
 
