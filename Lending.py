@@ -33,17 +33,93 @@ warnings.filterwarnings('ignore')
 
 
 # %%
-# Set plotting style
-sns.set_theme(style='whitegrid')
-plt.rcParams['figure.figsize'] = (12, 6)
+# ==============================================================================
+# 1. Complete Feature Domain Grouping (All 151 Columns Categorized)
+# ==============================================================================
+import polars as pl
+import pandas as pd
+from IPython.display import display
 
-# Load the accepted loans dataset
-file_path = 'data/accepted_2007_to_2018Q4.csv'
-print('Loading data with Polars...')
-df = pl.read_csv(file_path, ignore_errors=True)
-print(f'Initial shape: {df.shape}')
-pd.set_option('display.max_rows', None)
-display(df.head().to_pandas().T)
+# Group all 151 columns into 6 clean, non-empty banking & credit risk domains
+domain_definitions = {
+    '1. Loan Terms & Core Pricing': [
+        'id', 'member_id', 'loan_amnt', 'funded_amnt', 'funded_amnt_inv', 'term', 'int_rate', 
+        'installment', 'grade', 'sub_grade', 'issue_d', 'purpose', 'title', 'url', 'desc'
+    ],
+    '2. Borrower Profile, Employment & Income': [
+        'emp_title', 'emp_length', 'home_ownership', 'annual_inc', 'verification_status', 
+        'zip_code', 'addr_state', 'dti', 'annual_inc_joint', 'dti_joint', 'verification_status_joint'
+    ],
+    '3. Core Credit Bureau & Inquiries': [
+        'fico_range_low', 'fico_range_high', 'earliest_cr_line', 'inq_last_6mths', 'mths_since_last_delinq', 
+        'mths_since_last_record', 'open_acc', 'pub_rec', 'revol_bal', 'revol_util', 'total_acc', 
+        'initial_list_status', 'collections_12_mths_ex_med', 'mths_since_last_major_derog', 'policy_code', 'application_type'
+    ],
+    '4. Extended Trade Lines & Balance Metrics': [
+        'acc_now_delinq', 'tot_coll_amt', 'tot_cur_bal', 'open_acc_6m', 'open_act_il', 'open_il_12m', 
+        'open_il_24m', 'mths_since_rcnt_il', 'total_bal_il', 'il_util', 'open_rv_12m', 'open_rv_24m', 
+        'max_bal_bc', 'all_util', 'total_rev_hi_lim', 'inq_fi', 'total_cu_tl', 'inq_last_12m', 
+        'acc_open_past_24mths', 'avg_cur_bal', 'bc_open_to_buy', 'bc_util', 'chargeoff_within_12_mths', 
+        'delinq_amnt', 'mo_sin_old_il_acct', 'mo_sin_old_rev_tl_op', 'mo_sin_rcnt_rev_tl_op', 
+        'mo_sin_rcnt_tl', 'mort_acc', 'mths_since_recent_bc', 'mths_since_recent_bc_dlq', 
+        'mths_since_recent_inq', 'mths_since_recent_revol_delinq', 'num_accts_ever_120_pd', 
+        'num_actv_bc_tl', 'num_actv_rev_tl', 'num_bc_sats', 'num_bc_tl', 'num_il_tl', 
+        'num_op_rev_tl', 'num_rev_accts', 'num_rev_tl_bal_gt_0', 'num_sats', 'num_tl_120dpd_2m', 
+        'num_tl_30dpd', 'num_tl_90g_dpd_24m', 'num_tl_op_past_12m', 'pct_tl_nvr_dlq', 
+        'percent_bc_gt_75', 'pub_rec_bankruptcies', 'tax_liens', 'tot_hi_cred_lim', 
+        'total_bal_ex_mort', 'total_bc_limit', 'total_il_high_credit_limit', 
+        'revol_bal_joint', 'sec_app_fico_range_low', 'sec_app_fico_range_high', 
+        'sec_app_earliest_cr_line', 'sec_app_inq_last_6mths', 'sec_app_mort_acc', 
+        'sec_app_open_acc', 'sec_app_revol_util', 'sec_app_open_act_il', 
+        'sec_app_num_rev_accts', 'sec_app_chargeoff_within_12_mths', 
+        'sec_app_collections_12_mths_ex_med', 'sec_app_mths_since_last_major_derog'
+    ],
+    '5. Post-Origination & Historical Repayment Performance': [
+        'loan_status', 'pymnt_plan', 'out_prncp', 'out_prncp_inv', 'total_pymnt', 'total_pymnt_inv', 
+        'total_rec_prncp', 'total_rec_int', 'total_rec_late_fee', 'recoveries', 
+        'collection_recovery_fee', 'last_pymnt_d', 'last_pymnt_amnt', 'next_pymnt_d', 
+        'last_credit_pull_d', 'last_fico_range_high', 'last_fico_range_low'
+    ],
+    '6. Hardship Relief & Debt Settlement Records': [
+        'hardship_flag', 'hardship_type', 'hardship_reason', 'hardship_status', 'deferral_term', 
+        'hardship_amount', 'hardship_start_date', 'hardship_end_date', 'payment_plan_start_date', 
+        'hardship_length', 'hardship_dpd', 'hardship_loan_status', 'orig_projected_additional_interest', 
+        'hardship_payoff_balance_amount', 'hardship_last_payment_amount', 'debt_settlement_flag', 
+        'debt_settlement_flag_date', 'settlement_status', 'settlement_date', 'settlement_amount', 
+        'settlement_percentage', 'settlement_term'
+    ]
+}
+
+# Map every single column present in df to its respective group
+assigned_cols = set()
+table_data = []
+
+for group_name, defined_cols in domain_definitions.items():
+    present_cols = [c for c in df.columns if c in defined_cols]
+    if len(present_cols) > 0:
+        assigned_cols.update(present_cols)
+        table_data.append({
+            'Feature Domain Category': group_name,
+            'Column Count': len(present_cols),
+            'All Features in Category': ", ".join(present_cols)
+        })
+
+# Capture any remaining unmapped columns if present
+unmapped = [c for c in df.columns if c not in assigned_cols]
+if len(unmapped) > 0:
+    table_data.append({
+        'Feature Domain Category': '7. Operational Identifiers & Miscellaneous',
+        'Column Count': len(unmapped),
+        'All Features in Category': ", ".join(unmapped)
+    })
+
+domain_summary_df = pd.DataFrame(table_data)
+
+print(f"📊 FULL DATASET FEATURE INVENTORY ({df.shape[0]:,} Rows × {df.shape[1]} Columns):")
+print(f"   Total Grouped Columns: {domain_summary_df['Column Count'].sum()} / {len(df.columns)}")
+
+pd.set_option('display.max_colwidth', None)
+display(domain_summary_df.style.set_properties(**{'text-align': 'left'}))
 
 # %% [markdown]
 # ### Discussion: To Use or Not to Use Lending Club's Grade?
@@ -497,12 +573,14 @@ plt.show()
 # %% [markdown]
 # ### 3.6 Unsupervised Learning (Clustering & Dimensionality Reduction)
 # 
-# As part of our Exploratory Data Analysis, we use unsupervised learning to discover hidden structures and natural groupings among borrowers without using the target label (`default`). 
-# This helps us answer: Are there distinct 'Borrower Personas' in our data?
+# As part of our Exploratory Data Analysis, we utilize unsupervised learning to uncover latent structural archetypes among borrowers without relying on the target label (`default`). 
+# This addresses a core exploratory question: **Are there naturally distinct 'Borrower Personas' embedded within the portfolio?**
 # 
-# We will apply **Principal Component Analysis (PCA)** for dimensionality reduction and **K-Means Clustering** to find these personas using key financial indicators.
+# We apply **Principal Component Analysis (PCA)** for orthogonal dimensionality reduction followed by **$K$-Means Clustering** to delineate these personas across key financial indicators (`loan_amnt`, `int_rate`, `annual_inc`, `dti`, `revol_util`, `revol_bal`).
 # 
-# Because our financial features are heavily skewed (as seen in 4.5), we use median imputation for the remaining missing values prior to clustering, as the median is robust to extreme outliers.
+# #### Preprocessing & Transformation Protocol for Distance-Based Geometry:
+# * **Median Imputation:** Missing values are imputed using the training median to maintain robustness against extreme tail distortions.
+# * **Standardization & Scaling:** Because $K$-Means and PCA rely strictly on **Euclidean distance metrics**, features operating on vastly different scales (e.g., $\$100,000$ income vs. $20\%$ DTI) would artificially distort cluster geometry. We apply **`StandardScaler`** (alongside log transformations for heavy-tailed exposures) to ensure equal geometric weighting across all financial dimensions.
 
 # %% [markdown]
 # ### 3.6.1 Feature Selection & Multicollinearity Audit
@@ -533,7 +611,7 @@ all_numeric_features = [
 # %%
 existing_num_features = [col for col in all_numeric_features if col in train_df.columns]
 
-# נדגום 50,000 שורות שמכילות גם את הפיצ'רים וגם את ה-target
+# Sample 50,000 rows containing both features and the target label
 cols_to_sample = existing_num_features + ['target']
 # Sample 50000 rows in Polars
 df_sampled_pl = train_df.select(cols_to_sample).sample(n=50000, seed=42)
@@ -669,20 +747,21 @@ print(f"\n✅ Proceeding with K={chosen_k} based on Elbow bend and business gran
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# 1. אימון מודל ה-KMeans
+# 1. Train the final KMeans model
 kmeans_final = KMeans(n_clusters=chosen_k, random_state=42, n_init=10)
 df_unsup['Cluster'] = kmeans_final.fit_predict(X_scaled)
 
-# 2. התיקון: הצמדת עמודת ה-target שנלקחה מאותן 50,000 שורות שנדגמו
+# 2. Attach the target column aligned with the exact 50,000 sampled rows
 df_unsup['target'] = target_sampled
 
-# 3. חישוב פרופיל הממוצעים לכל אשכול
+
+# 3. Calculate feature mean profiles for each cluster
 cluster_profile = df_unsup.groupby('Cluster').mean()
 
-# 4. מיון דינמי מבוסס על אחוז הדיפולט (מהסיכון הנמוך לגבוה)
+# 4. Dynamically rank clusters based on empirical default rate (from lowest to highest risk)
 cluster_profile = cluster_profile.sort_values('target', ascending=True)
 
-# 5. שיוך שמות לפרסונות
+# 5. Assign domain persona labels based on risk ranking
 dynamic_persona_names = [
     'Persona 1: Prime / Safe (Low Risk)',
     'Persona 2: High Exposure / Wealthy (Mid Risk)',
@@ -690,7 +769,7 @@ dynamic_persona_names = [
 ]
 cluster_profile.index = dynamic_persona_names
 
-# 6. הצגת הטבלה המעוצבת
+# 6. Render styled summary table with heatmap formatting
 print("=== Dynamic Borrower Personas Summary Table (Ranked by Risk) ===")
 styled_table = cluster_profile.style.background_gradient(cmap='YlOrRd')\
     .format({
@@ -704,7 +783,7 @@ styled_table = cluster_profile.style.background_gradient(cmap='YlOrRd')\
     })
 display(styled_table)
 
-# 2. VISUAL PLOT: Comparative Bar Charts across Personas
+# 7. VISUAL PLOT: Comparative Bar Charts across Personas
 fig, axes = plt.subplots(2, 3, figsize=(16, 10))
 axes = axes.flatten()
 
@@ -738,23 +817,23 @@ plt.show()
 # %% [markdown]
 # ### 3.6.3 Key Findings & Business Takeaways (Borrower Personas)
 # 
-# > **Key Unsupervised Insight:** Even though K-Means had **zero access to the target label (`default`) during training**, purely geometrical clustering in the 6D financial feature space successfully segregated borrowers into 3 distinct risk tiers, with actual default rates ranging from **12.1% to 23.7%**.
+# > **Key Unsupervised Insight:** Even though K-Means had **zero access to the target label (`default`) during training**, purely geometrical clustering in the 6D financial feature space successfully segregated borrowers into 3 distinct risk tiers, with actual default rates ranging from **11.8% to 23.5%**.
 # 
 # ---
 # 
 # #### Borrower Personas Breakdown
 # 
-# 1. **`Persona 1: Prime / Safe` (Default Rate: 12.1% — Lowest Risk)**
-#    * **Financial Profile:** Moderate-High Income ($67.3K), Low DTI (13.5%), Low Interest Rate (10.6%), and exceptionally low Credit Utilization (**36.7%**).
-#    * **Domain Takeaway:** Represents conservative, highly solvent borrowers with low liquidity strain.
+# 1. **`Persona 1: Prime / Safe` (Default Rate: 11.8% — Lowest Risk)**
+#    * **Financial Profile:** Moderate-High Income ($66.0K), Low DTI (13.3), Low Interest Rate (10.7%), Low Loan Amount ($10.9K), and exceptionally low Credit Utilization (**36.9%**).
+#    * **Domain Takeaway:** Represents conservative, highly solvent borrowers with low liquidity strain and solid repayment capacity.
 # 
-# 2. **`Persona 2: High Exposure / Wealthy` (Default Rate: 19.8% — Moderate Risk)**
-#    * **Financial Profile:** Highest Income ($123.5K), but carrying substantial Loan Amounts ($26.4K), heavy Revolving Balances ($34.3K), and elevated Credit Utilization (**63.0%**).
-#    * **Domain Takeaway:** *High income is not a guarantee of safety.* These affluent borrowers are highly leveraged with large debt obligations.
+# 2. **`Persona 2: High Exposure / Wealthy` (Default Rate: 18.4% — Moderate Risk)**
+#    * **Financial Profile:** Highest Income ($125.5K), but carrying substantial Loan Amounts ($25.9K), heavy Revolving Balances ($33.3K), and elevated Credit Utilization (**63.7%**).
+#    * **Domain Takeaway:** *High income is not an absolute guarantee of safety.* These affluent borrowers carry heavy aggregate debt obligations and substantial loss exposure.
 # 
-# 3. **`Persona 3: Strained / High Risk` (Default Rate: 23.7% — Highest Risk)**
-#    * **Financial Profile:** Lowest Income ($56.3K), Highest DTI (**22.4%**), Highest Credit Utilization (**67.7%**), and Highest Interest Rate (15.2%).
-#    * **Domain Takeaway:** Classic liquidity crisis profile. Severe debt overload and maxed-out credit lines nearly double the default risk compared to Persona 1 (~1 in 4 borrowers default).
+# 3. **`Persona 3: Strained / High Risk` (Default Rate: 23.5% — Highest Risk)**
+#    * **Financial Profile:** Lowest Income ($55.2K), Highest DTI (**22.0**), Highest Credit Utilization (**67.5%**), and Highest Interest Rate (15.4%).
+#    * **Domain Takeaway:** Classic liquidity crisis profile. Severe debt overload and maxed-out revolving credit lines double the default risk compared to Persona 1 (nearly 1 in 4 borrowers default).
 
 # %% [markdown]
 # ### 3.6.4 PCA 2D Cluster Projection & Visual Validation
@@ -847,17 +926,24 @@ final_profiles.rename(columns={
 display(final_profiles)
 
 # %% [markdown]
-# ### 3.6.4 Explained Variance Analysis (Dimensionality vs. Information Retention)
+# ### 3.6.4 Explained Variance & Dynamic Persona Analysis
 # 
-# To assess information retention during dimensionality reduction, we evaluated the cumulative Explained Variance Ratio of the Principal Components:
+# To assess information retention during dimensionality reduction and evaluate cluster separation, we examine the Explained Variance Ratio alongside the empirical persona risk profiles:
 # 
-# • **Original 6D Feature Space (100% Variance):** Captures the full geometric information across our normalized financial vectors (`loan_amnt`, `int_rate`, `total_annual_inc`, `total_dti`, `revol_util`, `revol_bal`).
-# • **2D PCA Projection (55.14% Cumulative Variance):** PC1 and PC2 jointly capture over half of the global variance in the dataset despite a 66.7% reduction in dimensionality.
+# * **Original 6D Feature Space (100% Variance):** Captures the full geometric information across our normalized financial vectors (`loan_amnt`, `int_rate`, `annual_inc`, `dti`, `revol_util`, `revol_bal`).
+# * **2D PCA Projection (54.2% Cumulative Variance):** PC1 and PC2 jointly capture over half (54.2%) of the global variance despite a 66.7% reduction in dimensionality.
 # 
-# **Methodological & Research Implications:**
-# 1. **Effective Low-Dimensional Representation:** Retaining 55.14% of total variance in just two components confirms strong underlying covariance structures among financial variables, successfully mapping the primary trade-off between *Financial Scale (PC1)* and *Credit Risk/Strain (PC2)*.
-# 2. **Methodological Justification for 6D Clustering:** Because 44.86% of the variance resides within higher-order components (PC3–PC6), fitting $K$-Means directly in the native 6D space was essential to preserve subtle non-linear credit nuances. The 2D PCA projection is thus strictly utilized as an interpretable diagnostic and visualization proxy rather than a lossy input space for clustering.
-# 3.
+# #### Methodological & Empirical Insights:
+# 1. **Effective Low-Dimensional Representation:** Retaining **54.2% of total variance** in just two orthogonal components successfully captures the primary financial trade-off between *Financial Scale / Exposure (PC1)* and *Leverage / Credit Strain (PC2)*.
+# 2. **Methodological Justification for 6D Clustering:** Because **45.8% of the variance** resides within higher-order components (PC3–PC6), fitting $K$-Means directly in the native 6D space was essential to preserve subtle non-linear credit interactions. The 2D PCA projection is strictly utilized as an interpretable visualization proxy.
+# 3. **Monotonic Risk Separation across Personas:**
+#    * **Persona 1 (Prime / Safe):** Lowest default rate (**11.8%**) with conservative leverage (DTI 13.3, Revolving Util 37.0%).
+#    * **Persona 2 (High Exposure / Wealthy):** Moderate default rate (**18.4%**) with high income ($125,545) balancing substantial loan exposure ($25,897).
+#    * **Persona 3 (Strained / High Risk):** Highest default rate (**23.5%** — double Persona 1), characterized by high debt-to-income (DTI 22.0) and high credit utilization (67.5%).
+# 4. **Methodological Note on Persona Encoding & Target Integrity:**
+#    * **Strict Unsupervised Training (No Target Leakage):** The $K$-Means centroids were trained strictly via unsupervised Euclidean geometry on continuous financial vectors with **zero access to the target label (`default`)**.
+#    * **Post-Hoc Risk Labeling:** Sorting clusters by empirical Default Rate (11.8% $\rightarrow$ 23.5%) is purely an analytical interpretation step to assign human-readable business names (`Persona 1` to `Persona 3`).
+#    * **Production Determinism:** In real-time production inference, incoming applicants are assigned to their respective persona purely by computing the **Euclidean distance to the closest 6D centroid**, ensuring deterministic, leakage-free scoring without requiring future outcome labels.
 
 # %% [markdown]
 # ### 3.6.5 PCA Factor Loadings
@@ -992,57 +1078,122 @@ print(anomaly_stats)
 # 
 
 # %% [markdown]
-# ## 4. Feature Engineering
 # 
-# ### 4.1 Structural Missingness Flags
-# Create binary indicators for NULL = 'never had event', then fill NULLs with 999.
-# Missing values in credit data are rarely random. Creating explicit binary flags for missingness allows the model to learn if the *absence* of information is itself a risk signal.
-# 
-# For non-structural continuous features, we impute missing values using the median to prevent outliers from skewing the imputation. Categorical missing values are mapped to a distinct 'Unknown' category. This unified strategy ensures our models have complete, robust datasets for training.
+# #### Key Finding & Feature Engineering Recommendation:
+# * **The "Affluent Outlier" Signal:** Anomalous applicants exhibit a **substantially lower default rate (12.00%)** compared to typical applicants (**18.07%**), as these outliers are primarily driven by ultra-high-income and high-liquidity individuals.
+# * **Preserving Information Lost to Capping:** 
+#   Earlier in the pipeline, we applied **P99 Capping** to prevent extreme values (e.g., multi-million dollar salaries) from destabilizing linear and neural models. However, capping compresses these ultra-wealthy borrowers down to the 99th percentile threshold, causing an information loss.
+# * **The Action Plan:** We recommend engineering an explicit binary flag (**`is_anomaly`**) to feed into our downstream feature sets. This allows all models (both linear and tree-based) to retain the critical protective signal of these unique outlier profiles without sacrificing mathematical stability.
 
 # %% [markdown]
-# ## The Recency Transformation (1 / (x + 1))
+# ## 4. Feature Engineering
 # 
-# Previously, missing values in `mths_since_last_*` were imputed with the arbitrary value `999`. While tree-based algorithms (like LightGBM) handle massive arbitrary scalars perfectly fine by simply creating a split condition (e.g., `x > 100`), **distance-based algorithms (Linear Regression, MLPs, Neural Networks) are severely distorted by this**. A massive scalar artificially explodes the gradients and distorts the Euclidean distance, creating an unfair benchmark penalty for linear models.
+# ### 4.1 Structural Missingness & Imputation Strategy
+# Missing values in credit risk data are rarely random; the *absence* of information often carries a direct behavioral signal. 
 # 
-# **The Solution:** We replaced the 999 imputation with the reciprocal recency formula `1 / (x + 1)`. 
-# - An event that happened 0 months ago gets a value of `1.0` (Maximum risk / highly recent).
-# - An event that happened 100 months ago gets a value of `~0.01` (Low risk / very old).
-# - A missing value (`NULL`), which in this context explicitly indicates that the negative event *never happened*, is seamlessly imputed as `0.0`. This beautifully scales the feature between `0.0` and `1.0`, treating "never" as "infinite time ago" (zero risk), ensuring mathematical fairness and stability across all model architectures.
+# * **Explicit Missingness Indicators:** We generate binary flags (e.g., `emp_length_missing`) to allow models to learn whether unprovided information represents higher credit risk.
+# * **Non-Structural Numerical Features:** Imputed using the training partition's **median** to ensure robustness against extreme outliers.
+# * **Categorical Features:** Missing categories are explicitly mapped to a distinct `'Unknown'` class to preserve missingness topology.
+# * **Temporal Delinquency Histories (`mths_since_last_*`):** Handled via a dedicated **Recency Velocity Transformation** ($1 / (x + 1)$) rather than arbitrary high scalars, ensuring mathematical stability across all model families.
+
+# %% [markdown]
+# ### 4.2 The Recency Transformation ($1 / (x + 1)$)
+# 
+# A common legacy practice in tabular credit modeling is imputing missing values in delinquency recency columns (`mths_since_last_delinq`, `mths_since_last_record`) with an arbitrary high scalar (e.g., `999`). 
+# While tree-based models (LightGBM/XGBoost) can isolate such outliers with a single threshold split (`x > 100`), **distance-based and linear models (Logistic Regression, MLP Neural Networks) suffer severe gradient explosions and Euclidean distortion**, creating an artificial handicap in benchmark comparisons.
+# 
+# #### The Mathematical Solution:
+# We apply a non-linear reciprocal decay transformation:
+# $$f(x) = \frac{1}{x + 1}$$
+# 
+# * **Recent Severe Event ($x = 0\text{ months}):** Evaluates to **$1.0$** (Maximum immediate credit risk).
+# * **Distant Historical Event ($x = 100\text{ months}):** Evaluates to **$\sim 0.01$** (Negligible residual risk).
+# * **Structural Missingness ($\text{NULL}$):** Indicates that the negative event **never occurred** in the borrower's history. This is mathematically mapped to **$0.0$** (representing infinite elapsed time / zero historical delinquency risk).
+# 
+# > **Outcome:** Bounded smoothly within $[0.0, 1.0]$, this transformation guarantees perfect scale stability for linear and neural architectures while natively preserving the monotonic risk signal for tree models.
 
 # %%
-# Create structural missingness flags
+# ==============================================================================
+# 4.1 & 4.2 Structural Missingness Flags & Recency Transformation
+# ==============================================================================
+import pandas as pd
+from IPython.display import display
+import polars as pl
+
 structural_miss_cols = [
     'mths_since_last_delinq', 'mths_since_last_record',
     'mths_since_last_major_derog', 'mths_since_recent_bc_dlq',
     'mths_since_recent_revol_delinq', 'mths_since_recent_inq',
 ]
 
+report_data = []
+
 for col in structural_miss_cols:
     if col not in train_df.columns:
         continue
     flag_name = f'{col}_never'
+    
+    # 1. Calculate percentage of structural missingness before transformation
+    pct_never = train_df[col].is_null().mean() * 100
+    
+    # 2. Generate Binary Indicator Flag
     train_df = train_df.with_columns(pl.col(col).is_null().cast(pl.Int8).alias(flag_name))
     test_df = test_df.with_columns(pl.col(col).is_null().cast(pl.Int8).alias(flag_name))
-    # Recency Transformation: 1 / (x + 1), treating NULL (never happened) as 0.0
+    
+    # 3. Recency Transformation: 1 / (x + 1), treating NULL (never happened) as 0.0
     train_df = train_df.with_columns((1.0 / (pl.col(col) + 1.0)).fill_null(0.0).alias(col))
     test_df = test_df.with_columns((1.0 / (pl.col(col) + 1.0)).fill_null(0.0).alias(col))
+    
+    # Collect summary metrics for reporting
+    col_min = train_df[col].min()
+    col_max = train_df[col].max()
+    col_mean = train_df[col].mean()
+    
+    report_data.append({
+        'Feature Name': col,
+        'Flag Created': flag_name,
+        'Never Occurred (NULL %)': f"{pct_never:.1f}%",
+        'Transformed Min': f"{col_min:.3f}",
+        'Transformed Max': f"{col_max:.3f}",
+        'Transformed Mean': f"{col_mean:.4f}"
+    })
 
-# emp_length missing flag (anomalous - high default rate when missing)
+# Add emp_length_missing flag
 if 'emp_length' in train_df.columns:
+    pct_emp_miss = train_df['emp_length'].is_null().mean() * 100
     train_df = train_df.with_columns(pl.col('emp_length').is_null().cast(pl.Int8).alias('emp_length_missing'))
     test_df = test_df.with_columns(pl.col('emp_length').is_null().cast(pl.Int8).alias('emp_length_missing'))
+    report_data.append({
+        'Feature Name': 'emp_length',
+        'Flag Created': 'emp_length_missing',
+        'Never Occurred (NULL %)': f"{pct_emp_miss:.1f}%",
+        'Transformed Min': "0",
+        'Transformed Max': "1",
+        'Transformed Mean': f"{(pct_emp_miss/100):.4f}"
+    })
 
-print(f'Train shape after missingness flags: {train_df.shape}')
+# Render Beautiful Styled Report Table
+report_df = pd.DataFrame(report_data)
+print("📋 Structural Missingness & Recency Transformation Audit Report:")
+display(report_df.style.set_properties(**{'text-align': 'center'}))
+
+print(f"\n✅ Pipeline Complete! Updated Train Partition Shape: {train_df.shape[0]:,} rows × {train_df.shape[1]:,} columns")
 
 # %% [markdown]
 # ### 4.2 Domain Features (Credit Risk Intuition)
 # Raw features often lack business context. We combine variables to create new ratios (like adjusted DTI) that directly reflect a borrower's financial leverage and stress.
 
 # %%
+# ==============================================================================
+# 4.3 Domain Feature Engineering (Financial Ratios & Solvency Indicators)
+# ==============================================================================
+import pandas as pd
+from IPython.display import display
+import polars as pl
+
 EPSILON = 1e-6
 
-# Monthly burden: installment / monthly income
+# 1. Monthly burden: installment / monthly income
 train_df = train_df.with_columns(
     (pl.col('installment') / (pl.col('total_annual_inc') / 12 + EPSILON)).alias('installment_to_income')
 )
@@ -1050,7 +1201,7 @@ test_df = test_df.with_columns(
     (pl.col('installment') / (pl.col('total_annual_inc') / 12 + EPSILON)).alias('installment_to_income')
 )
 
-# Adjusted DTI: includes the proposed LC installment
+# 2. Adjusted DTI: includes the proposed LC installment
 train_df = train_df.with_columns(
     ((pl.col('total_dti')/100 * pl.col('total_annual_inc')/12 + pl.col('installment'))
      / (pl.col('total_annual_inc')/12 + EPSILON) * 100).alias('adjusted_dti')
@@ -1060,90 +1211,207 @@ test_df = test_df.with_columns(
      / (pl.col('total_annual_inc')/12 + EPSILON) * 100).alias('adjusted_dti')
 )
 
-# Loan to income ratio
+# 3. Loan to income ratio
 train_df = train_df.with_columns((pl.col('loan_amnt') / (pl.col('total_annual_inc') + EPSILON)).alias('loan_to_income'))
 test_df = test_df.with_columns((pl.col('loan_amnt') / (pl.col('total_annual_inc') + EPSILON)).alias('loan_to_income'))
 
-# Estimated revolving limit
+# 4. Estimated revolving limit
 train_df = train_df.with_columns((pl.col('revol_bal') / (pl.col('revol_util')/100 + EPSILON)).alias('estimated_revol_limit'))
 test_df = test_df.with_columns((pl.col('revol_bal') / (pl.col('revol_util')/100 + EPSILON)).alias('estimated_revol_limit'))
 
-print('Domain features created: installment_to_income, adjusted_dti, loan_to_income, estimated_revol_limit')
-print(f'Train shape: {train_df.shape}')
+# ==========================================
+# Beautiful Summary Report Generation
+# ==========================================
+engineered_features = [
+    {
+        'Feature': 'installment_to_income',
+        'Formula / Logic': 'Monthly Installment / Monthly Income',
+        'Business Purpose': 'Monthly cash-flow payment strain',
+        'Median': f"{train_df['installment_to_income'].median():.2%}",
+        'Mean': f"{train_df['installment_to_income'].mean():.2%}",
+        'Max': f"{train_df['installment_to_income'].max():.2f}"
+    },
+    {
+        'Feature': 'adjusted_dti',
+        'Formula / Logic': 'DTI + Proposed LC Installment (%)',
+        'Business Purpose': 'Total post-funding debt burden',
+        'Median': f"{train_df['adjusted_dti'].median():.1f}%",
+        'Mean': f"{train_df['adjusted_dti'].mean():.1f}%",
+        'Max': f"{train_df['adjusted_dti'].max():.1f}%"
+    },
+    {
+        'Feature': 'loan_to_income',
+        'Formula / Logic': 'Loan Amount / Total Annual Income',
+        'Business Purpose': 'Macro leverage & loan principal exposure',
+        'Median': f"{train_df['loan_to_income'].median():.2f}",
+        'Mean': f"{train_df['loan_to_income'].mean():.2f}",
+        'Max': f"{train_df['loan_to_income'].max():.2f}"
+    },
+    {
+        'Feature': 'estimated_revol_limit',
+        'Formula / Logic': 'Revolving Balance / Revolving Util',
+        'Business Purpose': 'Total credit line capacity proxy ($)',
+        'Median': f"${train_df['estimated_revol_limit'].median():,.0f}",
+        'Mean': f"${train_df['estimated_revol_limit'].mean():,.0f}",
+        'Max': f"${train_df['estimated_revol_limit'].max():,.0f}"
+    }
+]
+
+domain_df = pd.DataFrame(engineered_features)
+print("📊 Domain Feature Engineering Execution Report:")
+display(domain_df.style.set_properties(**{'text-align': 'left'}))
+
+print(f"\n✅ All 4 Domain Features Created Successfully!")
+print(f"   Updated Train Partition Shape: {train_df.shape[0]:,} rows × {train_df.shape[1]:,} columns")
 
 # %% [markdown]
 # ### 4.3 Categorical Encoding & Final Cleanup
 # Machine learning models require numerical inputs. We ordinally encode features with a natural rank and one-hot encode nominal categories to ensure the model correctly interprets their relationships.
 
 # %%
-# emp_length ordinal encoding
-emp_length_map = {'< 1 year': 0, '1 year': 1, '2 years': 2, '3 years': 3,
+# ==============================================================================
+# 4.4 Ordinal & Categorical Integer Encoding Pipeline
+# ==============================================================================
+import pandas as pd
+from IPython.display import display
+import polars as pl
+
+encoding_audit = []
+
+# 1. emp_length ordinal encoding (0 to 10 years)
+emp_length_map = {
+    '< 1 year': 0, '1 year': 1, '2 years': 2, '3 years': 3,
     '4 years': 4, '5 years': 5, '6 years': 6, '7 years': 7,
-    '8 years': 8, '9 years': 9, '10+ years': 10}
+    '8 years': 8, '9 years': 9, '10+ years': 10
+}
 if 'emp_length' in train_df.columns:
     train_df = train_df.with_columns(pl.col('emp_length').replace_strict(emp_length_map, default=None).cast(pl.Float64).alias('emp_length_num'))
     test_df = test_df.with_columns(pl.col('emp_length').replace_strict(emp_length_map, default=None).cast(pl.Float64).alias('emp_length_num'))
     train_df = train_df.with_columns(pl.col('emp_length_num').fill_null(0.0))
     test_df = test_df.with_columns(pl.col('emp_length_num').fill_null(0.0))
+    
+    encoding_audit.append({
+        'Original Column': 'emp_length',
+        'Encoded Column': 'emp_length_num',
+        'Encoding Type': 'Ordinal Scale',
+        'Value Range': '0 ( <1 yr ) to 10 ( 10+ yrs )',
+        'Missing Values Filled': '0.0 (Treated via flag)'
+    })
 
-# term encoding
+# 2. term encoding (36 or 60 months)
 if 'term' in train_df.columns:
     train_df = train_df.with_columns(pl.when(pl.col('term').str.contains('36')).then(36).otherwise(60).alias('term_num'))
     test_df = test_df.with_columns(pl.when(pl.col('term').str.contains('36')).then(36).otherwise(60).alias('term_num'))
+    
+    encoding_audit.append({
+        'Original Column': 'term',
+        'Encoded Column': 'term_num',
+        'Encoding Type': 'Binary Numeric',
+        'Value Range': '36 or 60 months',
+        'Missing Values Filled': 'None (Complete)'
+    })
 
-# sub_grade ordinal (A1=1 ... G5=35)
+# 3. sub_grade ordinal encoding (A1=1 ... G5=35)
 if 'sub_grade' in train_df.columns:
     sub_grades = sorted(train_df['sub_grade'].unique().drop_nulls().to_list())
     sg_map = {sg: i+1 for i, sg in enumerate(sub_grades)}
     train_df = train_df.with_columns(pl.col('sub_grade').replace_strict(sg_map, default=0).cast(pl.Int32).alias('sub_grade_num'))
     test_df = test_df.with_columns(pl.col('sub_grade').replace_strict(sg_map, default=0).cast(pl.Int32).alias('sub_grade_num'))
+    
+    encoding_audit.append({
+        'Original Column': 'sub_grade',
+        'Encoded Column': 'sub_grade_num',
+        'Encoding Type': 'Ordinal Granular Rank',
+        'Value Range': '1 (A1 - Lowest Risk) to 35 (G5 - Top Risk)',
+        'Missing Values Filled': '0 (Fallback)'
+    })
 
-print(f'Train shape after encoding: {train_df.shape}')
+# Render Beautiful Styled Report Table
+encoding_df = pd.DataFrame(encoding_audit)
+print("📋 Ordinal & Categorical Encoding Audit Report:")
+display(encoding_df.style.set_properties(**{'text-align': 'left'}))
+
+print(f"\n✅ Encoding Pipeline Completed!")
+print(f"   Updated Train Partition Shape: {train_df.shape[0]:,} rows × {train_df.shape[1]:,} columns")
+print(f"   Updated Test Partition Shape:  {test_df.shape[0]:,} rows × {test_df.shape[1]:,} columns")
 
 # %% [markdown]
-# ### 4.4 K-Means Borrower Personas (Engineered Feature)
+# ### 4.5 K-Means Borrower Personas (Feature Engineering Integration)
 # 
-# We reintegrate the unsupervised clustering logic to assign each borrower to one of the 3 risk personas discovered during EDA.
+# We formalize our unsupervised EDA clustering into an explicit feature: **`borrower_persona`** ($K=3$).
+# 
+# * **Leakage-Free Training:** `StandardScaler` and `KMeans` are fitted **strictly on the Train Set**, then applied to Test.
+# * **Encoding Strategy:**
+#   * **Tree Models (LightGBM/XGBoost):** Ingested natively as a **Polars `Categorical`** type.
+#   * **Linear / Neural Models:** Handled via **One-Hot Encoding** to capture discrete persona baseline risks without assuming linear hierarchy.
 
 # %%
+# ==============================================================================
+# 4.5 Unsupervised Borrower Persona Pipeline Integration (K-Means Clustering)
+# ==============================================================================
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
+import pandas as pd
+from IPython.display import display
+import polars as pl
 
-# 1. Define features (updated names based on pipeline state)
+# 1. Define features for clustering
 persona_features = ['loan_amnt', 'int_rate', 'total_annual_inc', 'total_dti', 'revol_util', 'revol_bal']
 
-# 2. Impute missing values with the median from train_df
+# 2. Impute missing values with the median strictly from train_df (Leakage-Free)
 train_medians = {f: train_df[f].drop_nulls().median() for f in persona_features}
 for f in persona_features:
     train_df = train_df.with_columns(pl.col(f).fill_null(train_medians[f]))
     test_df = test_df.with_columns(pl.col(f).fill_null(train_medians[f]))
 
-# 3. Extract to numpy
+# 3. Extract to numpy arrays
 X_train_k = train_df.select(persona_features).to_numpy()
 X_test_k = test_df.select(persona_features).to_numpy()
 
-# 4. Scale features
+# 4. Standardize features (Fit strictly on Train, Transform Test)
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train_k)
 X_test_scaled = scaler.transform(X_test_k)
 
-# 5. Train KMeans
+# 5. Train KMeans (K=3)
 kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
 train_labels = kmeans.fit_predict(X_train_scaled)
 test_labels = kmeans.predict(X_test_scaled)
 
 # 6. Assign labels back to train/test as categorical features
-# Polars Categorical requires string backing
 train_df = train_df.with_columns(pl.Series('borrower_persona', [f"Persona_{l}" for l in train_labels]).cast(pl.Categorical))
 test_df = test_df.with_columns(pl.Series('borrower_persona', [f"Persona_{l}" for l in test_labels]).cast(pl.Categorical))
 
-print(f"Successfully integrated 'borrower_persona' into DataFrames.")
+# ==========================================
+# Generate Cluster Integration Audit Report
+# ==========================================
+train_counts = train_df['borrower_persona'].value_counts().sort('borrower_persona')
+test_counts = test_df['borrower_persona'].value_counts().sort('borrower_persona')
+
+# Calculate default rate per persona in train set
+train_risk = train_df.group_by('borrower_persona').agg(pl.col('target').mean().alias('default_rate')).sort('borrower_persona')
+
+persona_report = pd.DataFrame({
+    'Borrower Persona': train_counts['borrower_persona'].to_list(),
+    'Train Count': [f"{c:,}" for c in train_counts['count'].to_list()],
+    'Train Share (%)': [f"{(c/len(train_df)*100):.1f}%" for c in train_counts['count'].to_list()],
+    'Test Count': [f"{c:,}" for c in test_counts['count'].to_list()],
+    'Test Share (%)': [f"{(c/len(test_df)*100):.1f}%" for c in test_counts['count'].to_list()],
+    'Train Default Rate': [f"{(r*100):.2f}%" for r in train_risk['default_rate'].to_list()]
+})
+
+print("🏷️ Unsupervised Borrower Persona Integration Report (K=3):")
+display(persona_report.style.set_properties(**{'text-align': 'center'}))
+
+print(f"\n✅ Feature 'borrower_persona' successfully engineered & integrated into train/test partitions!")
+print(f"   Train Partition Shape: {train_df.shape[0]:,} rows × {train_df.shape[1]:,} columns")
+print(f"   Test Partition Shape:  {test_df.shape[0]:,} rows × {test_df.shape[1]:,} columns")
 
 # %% [markdown]
-# ### 4.5 Heavy-Tailed Variable Log Capping (For Linear Models)
+# ## 4.5 Heavy-Tailed Variable Log Capping (For Linear Models)
 
 # %% [markdown]
-# ## Handling Heavy-Tailed Distributions & Log Capping
+# ### Handling Heavy-Tailed Distributions & Log Capping
 # 
 # Financial data features like `annual_inc` and `revol_bal` exhibit extreme right-skewness (heavy tails). 
 # While tree-based algorithms remain invariant to monotonic transformations and handle outliers inherently well, **feeding raw skewed features into distance-based models (Neural Networks, Logistic Regression) causes severe instability**. Extreme outliers drastically shift the decision boundary and dominate the weight updates, crippling the linear models' performance and resulting in an unfair benchmark.
@@ -2835,13 +3103,15 @@ print("=" * 80)
 # 
 # While our pipeline achieves market-leading performance and generates over $10.5M in incremental profit, several advanced data science avenues can further refine the model:
 # 
-# 1. **Socio-Economic Zip Code Census Mapping:**
+# 1. **Historical Data Truncation (Pre-2012 Regimes):**
+#    A critical retrospective analysis of the 2007–2011 incubation period reveals negligible loan volume (<5% of records) alongside startup-phase policy adjustments and the 2008 financial crisis. While our models were overwhelmingly anchored on the mature 2012–2015 era (>95% of data)—rendering this early noise practically harmless—future iterations deployed in banking production should strictly truncate pre-2012 data to enforce pure steady-state macroeconomic training.
+# 2. **Socio-Economic Zip Code Census Mapping:**
 #    Currently, `zip_code` is processed as a 3-digit regional prefix. Future iterations will map these prefixes to external U.S. Census Bureau and Bureau of Labor Statistics (BLS) datasets (e.g., median county household income, regional unemployment rate, local cost of living index) to inject deep localized macroeconomic context.
-# 2. **Reject Inference on the 1.7GB Rejected Loan Dataset:**
+# 3. **Reject Inference on the 1.7GB Rejected Loan Dataset:**
 #    Our model is trained exclusively on *accepted* loans, introducing potential survivorship bias. By applying semi-supervised **Reject Inference** (e.g., Fuzzy Augmentation or Two-Stage Heckman Selection Models), we can model the creditworthiness of rejected applicants and refine borderline decision thresholds.
-# 3. **Macroeconomic Climate & Fed Rate Integration:**
+# 4. **Macroeconomic Climate & Fed Rate Integration:**
 #    Integrating historical Fed Funds rates and Consumer Price Index (CPI) trends will enable dynamic macroeconomic stress-testing during rising interest rate and inflationary environments.
-# 4. **Automated Data Drift Monitoring (PSI):**
+# 5. **Automated Data Drift Monitoring (PSI):**
 #    Deploying real-time monitoring of the **Population Stability Index (PSI)** on incoming applicant payloads will detect demographic shifts (e.g., wage inflation) and automatically trigger retraining workflows.
 
 
